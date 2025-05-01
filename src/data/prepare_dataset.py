@@ -1,7 +1,9 @@
 from datasets import load_dataset
 
-from src.data.prompt import SYSTEM_PROMPT_TOOLS as SYSTEM_PROMPT
-from src.data.prompt import build_prompt, build_system_tools
+#from src.data.prompt import SYSTEM_PROMPT_TOOLS as SYSTEM_PROMPT
+#from src.data.prompt import build_prompt, build_system_tools
+from src.data.doctor_patient_prompts import *
+import json
 
 from datasets import load_dataset, Dataset
 
@@ -9,12 +11,43 @@ from datasets import load_dataset, Dataset
 def prepare_dataset(split="train", name="gsm8k", eval_size=10):
     if name == "gsm8k":
         return prepare_dataset_gsm8k(split, eval_size)
+    elif name == "cmb":
+        return prepare_dataset_cmb(split,eval_size)
     elif name == "medmcqa":
         return prepare_dataset_medmcqa(split, eval_size)
     elif name == "medqa":
         return prepare_dataset_medqa(split, eval_size)
     else:
         raise ValueError(f"Unknown dataset name: {name}")
+
+
+def prepare_dataset_cmb(split="train", eval_size=10):
+    with open('src/data/cmb_atomic_patient_test.json') as f:
+        data = json.load(f)
+
+    formatted_data=[]
+
+    for idx,example in enumerate(data):
+        partial_question = '，'.join(example['facts'][:int(len(example['facts']) / 2)]) + '。' + example['atomic_question']
+        option_str = "\n".join([f"{key}: {value}" for key, value in example['option'].items()])
+        prompt_str = doctor_system_prompt.format(question_type=example['question_type'], question=partial_question,
+                                                    option_str=option_str)
+        final_prompt = (
+                "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"
+                "<|im_start|>user\n" + prompt_str + "\n<|im_end|>\n<|im_start|>assistant\n"
+        )
+        formatted_example={
+            "id": idx + 1,
+            'prompt':final_prompt,
+            'facts':example['facts'],
+            'answer':example['answer'],
+            'option':example['option']
+        }
+        formatted_data.append(formatted_example)
+
+    dataset = Dataset.from_list(formatted_data)
+
+    return dataset
 
 
 def prepare_dataset_gsm8k(split="train", eval_size=10):
@@ -99,7 +132,7 @@ def prepare_dataset_medqa(split="train", eval_size=10):
 
         prompt_str = "\n".join(
             [
-                build_system_tools(SYSTEM_PROMPT).strip(),
+                #build_system_tools(SYSTEM_PROMPT).strip(),
                 f"""Question: {question}f
             Options:
             {options_text}""",
