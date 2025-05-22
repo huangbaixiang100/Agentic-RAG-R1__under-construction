@@ -2,19 +2,33 @@ compute_environment: LOCAL_MACHINE
 debug: false
 deepspeed_config:
   deepspeed_multinode_launcher: standard
+  gradient_accumulation_steps: 1
+  gradient_clipping: 1.0
   offload_optimizer_device: none
   offload_param_device: none
-  zero3_init_flag: false
-  zero3_save_16bit_model: false
+  zero3_init_flag: true
+  zero3_save_16bit_model: true
   zero_stage: 3
-distributed_type: DEEPSPEED 
+    # 添加以下优化参数
+  zero_reduce_bucket_size: 5e7            # 减小通信bucket大小
+  zero_reduce_scatter: true               # 使用reduce-scatter代替reduce+all-gather
+  zero_contiguous_gradients: true         # 连续存储梯度
+  zero_force_dp_cpu_optimizer: false      # 关闭强制DataParallel CPU优化器
+  allgather_bucket_size: 5e7              # 减小allgather bucket大小
+  stage3_prefetch_bucket_size: 5e7        # 减小预取bucket大小
+  stage3_max_live_parameters: 1e8         # 限制实时参数数量
+  stage3_max_reuse_distance: 1e8          # 限制重用距离
+  stage3_param_persistence_threshold: 1e5  # 参数持久性阈值
+  reduce_scatter: true                    # 使用reduce-scatter算法
+  communication_data_type: "bf16"         # 通信时使用BF16以减少通信量
+distributed_type: DEEPSPEED
 # distributed_type: MULTI_GPU
 downcast_bf16: 'no'
 machine_rank: 0
 main_training_function: main
-mixed_precision: bf16
+mixed_precision: fp16
 num_machines: 1
-num_processes: 1
+num_processes: 2
 rdzv_backend: static
 same_network: true
 tpu_env: []

@@ -1,0 +1,97 @@
+{
+  "accuracy": 0.0,
+  "correct_count": 0,
+  "total_count": 10,
+  "samples": [
+    {
+      "sample_idx": 0,
+      "model_choice": "",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "patient: 医生，我不是很清楚具体的治疗措施，但我相信您会根据我的情况做出最好的决定。我听说我这种情况可能需要特别的处理，您看呢？<|im_end|>\ndoctor: question: 根据患者的症状和检查结果，首选治疗措施是什么？<|im_end|>\npatient: 医生，我不是很清楚具体的治疗措施，但我相信您会根据我的情况做出最好的决定。我听说我这种情况可能需要特别的处理，您看呢？<|im_end|>\n",
+      "num_turns": 2
+    },
+    {
+      "sample_idx": 1,
+      "model_choice": "C",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "patient: 医生，我之前查出有小型的子宫肌瘤，不确定这会不会影响我使用口服避孕药。您觉得我适合用口服避孕药来预防意外怀孕吗？<|im_end|>\ndoctor: question:\n请问患者是否适合使用口服避孕药来预防意外怀孕？<|im_end|>\npatient: 医生，我之前查出有小型的子宫肌瘤，不确定这会不会影响我使用口服避孕药。您觉得我适合用口服避孕药来预防意外怀孕吗？<|im_end|>\n",
+      "num_turns": 2
+    },
+    {
+      "sample_idx": 2,
+      "model_choice": "",
+      "correct_answer": "A",
+      "is_correct": false,
+      "dialog": "patient: 医生，其实我也说不上来具体的原因，就是经常会感到莫名的紧张和害怕，这种感觉已经持续了大概3个月了。有时候会因为一些小事而感到非常焦虑，甚至有时候会在没有任何明显原因的情况下就感到害怕。<|im_end|>\ndoctor: question: 您最近感到紧张或害怕的原因是什么？<|im_end|>\npatient: 医生，其实我也说不上来具体的原因，就是经常会感到莫名的紧张和害怕，这种感觉已经持续了大概3个月了。有时候会因为一些小事而感到非常焦虑，甚至有时候会在没有任何明显原因的情况下就感到害怕。<|im_end|>\n",
+      "num_turns": 2
+    },
+    {
+      "sample_idx": 3,
+      "model_choice": "",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 4,
+      "model_choice": "B",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 5,
+      "model_choice": "ABCDE",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 医生，我并不了解这些肿物的具体组织病理情况，我只知道它们是肉红色的，质地柔软，而且随着时间逐渐增多，但是没有不适感。至于它们是由哪种细胞组成的，我没有这方面的知识。您说的脂肪瘤听起来和我的症状有些像，但是具体情况我也不清楚。<|im_end|>\ndoctor: question:\n患者是男性，患者年龄12岁，患者全身多发孤立性柔软肿物已有10年，患者出生后即发现躯干部淡褐色素沉着性斑片，患者躯干部淡褐色素沉着性斑片无痛痒，患者2岁时开始出现躯干等部位肉红色孤立性柔软肿物。其组织病理中可见以何种细胞分布为主？\n\n选项：A: 单核细胞  \nB: 浆细胞  \nC: 肥大细胞  \nD: 中性粒细胞  \nE: 脂肪细胞  \n\n根据您描述的症状，最有可能的病变类型是：\n\n脂肪瘤（Fatty Nodule）是一种良性肿瘤，通常由成熟的脂肪细胞组成。它可以在身体的不同部位出现，包括皮肤下的软组织中。脂肪瘤的特点是质地较硬，表面平滑，有时会感觉像皮革一样。它们可以随着年龄的增长而增大，但一般不会引起疼痛或瘙痒。\n\n因此，根据您的描述，最符合患者的病情的是选项E: 脂肪细胞。<|im_end|>\npatient: 医生，我并不了解这些肿物的具体组织病理情况，我只知道它们是肉红色的，质地柔软，而且随着时间逐渐增多，但是没有不适感。至于它们是由哪种细胞组成的，我没有这方面的知识。您说的脂肪瘤听起来和我的症状有些像，但是具体情况我也不清楚。<|im_end|>\n",
+      "num_turns": 2
+    },
+    {
+      "sample_idx": 6,
+      "model_choice": "C",
+      "correct_answer": "E",
+      "is_correct": false,
+      "dialog": "patient: 根据我的症状和检查结果，我不是急性淋巴细胞白血病。我的骨髓检查显示原始细胞为0.8，过氧化物酶染色弱阳性，糖原染色可见胞浆弥漫性淡染，非特异性酯酶阳性且可被NaF抑制，这些都更符合急性髓系白血病的特点。<|im_end|>\ndoctor: question:\n患者是否患有急性淋巴细胞白血病？<|im_end|>\npatient: 根据我的症状和检查结果，我不是急性淋巴细胞白血病。我的骨髓检查显示原始细胞为0.8，过氧化物酶染色弱阳性，糖原染色可见胞浆弥漫性淡染，非特异性酯酶阳性且可被NaF抑制，这些都更符合急性髓系白血病的特点。<|im_end|>\n",
+      "num_turns": 2
+    },
+    {
+      "sample_idx": 7,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 我最近3个月来一直有刺激性的咳嗽，而且咳出来的痰里有血。近1个月，我还发现自己声音变得嘶哑。除此之外，就是感觉身体没有以前那么有劲了。<|im_end|>\ndoctor: question: 请问患者目前的具体症状是什么？<|im_end|>\npatient: 我最近3个月来一直有刺激性的咳嗽，而且咳出来的痰里有血。近1个月，我还发现自己声音变得嘶哑。除此之外，就是感觉身体没有以前那么有劲了。<|im_end|>\n",
+      "num_turns": 2
+    },
+    {
+      "sample_idx": 8,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 我是女性。<|im_end|>\ndoctor: question:\n请问胡某的性别是什么？<|im_end|>\npatient: 我是女性。<|im_end|>\n",
+      "num_turns": 2
+    },
+    {
+      "sample_idx": 9,
+      "model_choice": "",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    }
+  ],
+  "config": {
+    "model_path": "/root/小北健康-模型",
+    "dataset_split": "train",
+    "eval_size": 10,
+    "batch_size": 1,
+    "max_new_tokens": 512,
+    "max_generate_iterations": 3,
+    "temperature": 0.7,
+    "do_sample": true
+  }
+}

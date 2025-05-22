@@ -1,0 +1,817 @@
+{
+  "accuracy": 0.01,
+  "correct_count": 1,
+  "total_count": 100,
+  "samples": [
+    {
+      "sample_idx": 0,
+      "model_choice": "C",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "patient: 医生，我不太明白您的问题，但根据我的情况，这次行经已经8天了，经量还是很多。我之前也有过类似的情况，但这次感觉更加严重。我不知道这是否符合您说的“持续出血”。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 1,
+      "model_choice": "",
+      "correct_answer": "ABDE",
+      "is_correct": false,
+      "dialog": "patient: 医生，我听说类风湿关节炎通常表现为关节肿痛，尤其是手的小关节，这和我的症状很像。我确诊为类风湿关节炎，不知道我的症状是否符合这种疾病的典型表现？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 2,
+      "model_choice": "",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "patient: 是的，我已经结婚了。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 3,
+      "model_choice": "A",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "patient: 医生，我今早确实呕血了，有200ml，我不知道是否需要紧急做胃液分析，您觉得有必要吗？<|im_end|>\ndoctor: question: 患者是否需要进行紧急胃液分析来确认是否有出血？\n<|im_start|>user\n医生，我今早确实呕血了，大概有200ml，您觉得需要做胃液分析来确认是否有持续出血吗？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 4,
+      "model_choice": "D",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "patient: 医生，我看到这个问题了，但是这些化验结果的专业知识我并不了解。我不知道支持CML急性期的具体化验结果应该是哪一项。我只知道我发热、咽痛，症状已经持续了10天，而且我的白细胞计数WBC为89×10^9／L。其他更专业的信息我就不太清楚了，需要您来判断。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 5,
+      "model_choice": "",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "patient: 医生，我不太了解亚急性甲状腺炎，但是您提到的症状和我的情况相似。我最近确实感觉很不好，有纳差和消瘦的症状已经持续了3个月，最近两天还感到特别嗜睡。我之前去检查过，医生说我有甲状腺I度肿大，还有巩膜轻度黄染。这些是不是和亚急性甲状腺炎有关呢？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 6,
+      "model_choice": "A",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 医生，我明白了。我会注意让孩子多休息，保持家里空气流通，也会让孩子多喝水。如果情况没有好转，我一定会带他去医院的。谢谢医生的建议！<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 7,
+      "model_choice": "BD",
+      "correct_answer": "E",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 8,
+      "model_choice": "",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 9,
+      "model_choice": "C",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "patient: 我不知道，医生。我只知道我因为尿少、水肿和肉眼血尿被诊断为急性肾炎，其他的我不太清楚。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 10,
+      "model_choice": "",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "patient: 我不知道。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 11,
+      "model_choice": "D",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "patient: 医生，我最近的心电图显示我的心室律变得规整，心率是50次/分钟。根据我患有心房颤动多年的病史，您认为这最有可能是什么类型的心律失常呢？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 12,
+      "model_choice": "",
+      "correct_answer": "E",
+      "is_correct": false,
+      "dialog": "patient: 我不知道，我没有专业的医疗知识来判断这个情况。我在转运途中一直使用硝酸甘油微泵维持，但是我没有信息说需要启动除颤器。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 13,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 您好！我目前感觉非常不好，突然发高烧，体温达到了39°C，已经持续3天了。我还有畏寒、头痛、腰痛和眼眶痛等症状。我的脸、脖子和上胸部都出现了潮红，眼睛、喉咙和舌头也都是充血鲜红的。此外，我还有食欲不振、恶心和腹痛的情况。我的腋下、上胸部、颈部和后背部的皮肤上还有一些点状的出血点。我感觉非常不舒服。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 14,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 15,
+      "model_choice": "",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 16,
+      "model_choice": "B",
+      "correct_answer": "E",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 17,
+      "model_choice": "",
+      "correct_answer": "E",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 18,
+      "model_choice": "ABCDE",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "patient: 医生，我感觉非常不舒服，具体来说，我出现了烦躁、呼吸增快、心率增快、血压上升、呼吸困难、发绀，甚至有时候会昏迷。这些症状让我很担心，不知道是不是和我正在进行的氧气治疗有关。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 19,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 医生，我听说您想了解我症状的更多信息。自从4年前开始，我经常感到右上腹部疼痛，尤其是在午夜时分，疼痛还会放射到我的背部。最严重的是，我先后已经发生了4次上消化道大出血的情况。不过，我之前做了胃肠钡餐检查，结果没有发现异常。体检的时候，医生只发现我右上腹有压痛。希望这些信息对您诊断有帮助。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 20,
+      "model_choice": "",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 21,
+      "model_choice": "",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "patient: 医生，我不太清楚具体的疾病名称，但我知道孩子高热、呕吐、惊厥，还处于昏睡状态，皮肤有花纹，看上去非常严重。请您尽快诊断，帮帮我们。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 22,
+      "model_choice": "",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "patient: 医生，我的右上腹疼痛已经持续了3个多月了，之前做了B超检查，发现肝脏有多发性散在性光团，后来被诊断为继发性肝癌。我猜这可能是疼痛的原因，但具体是什么原因导致的，我也不太清楚。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 23,
+      "model_choice": "D",
+      "correct_answer": "E",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 24,
+      "model_choice": "",
+      "correct_answer": "ABC",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 25,
+      "model_choice": "E",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 26,
+      "model_choice": "",
+      "correct_answer": "E",
+      "is_correct": false,
+      "dialog": "patient: 医生，我是来咨询关于我反复上腹痛的问题的。这种情况已经持续了8年了，但最近2个月疼痛明显加重。之前做了五肽促胃液素刺激试验，结果显示我有胃酸缺乏。这些信息能帮助您判断我可能患的是什么病吗？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 27,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 28,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 医生，我不认为非典型增生是我目前的情况。我最近被诊断为患有急性乳腺炎，并且并发了乳瘘。我在哺乳期间出现了这些问题。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 29,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 医生，我最近确实感到腹痛和腹胀，而且还有呕吐，已经两天没有排便排气了。我听说这种情况可能是肠梗阻，但具体是什么原因导致的，我也不清楚。您能帮我分析一下吗？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 30,
+      "model_choice": "",
+      "correct_answer": "A",
+      "is_correct": false,
+      "dialog": "patient: 医生，我听说我的情况需要尽快治疗，但是具体应该采取哪种方法，我也不太清楚。您看，根据我现在的病情，最合适的治疗方法是什么？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 31,
+      "model_choice": "",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "patient: 医生，我也不太清楚具体原因，只知道这些丘疹在数年内慢慢变大，最后连成了一片片的斑块。我一直没有特别注意，直到最近感觉有些不适才来就诊。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 32,
+      "model_choice": "",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "patient: 医生，我最近感觉尿频比较严重，而且排尿也越来越困难，这种症状在过去的几个月里逐渐加重。上周我做了CT检查，结果显示前列腺后叶增大，密度减低，还发现了一个15mm×20mm的轻度强化病灶，边缘还算清晰，但是病变与周围盆底肌的分界不清楚。您看这种情况需要立即就医吗？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 33,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 我是女性。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 34,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 医生，我现在的症状是发热，体温达到了39.4℃，而且我的右膝很疼，已经持续3天了。我的右大腿下面的部分有点肿，摸起来感觉比另一边热，按压时也会感到疼痛。这些就是我目前的主要症状和体征。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 35,
+      "model_choice": "",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "patient: 医生，我只知道我被诊断出有癌症，但具体是哪种类型，我不太清楚。您能告诉我吗？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 36,
+      "model_choice": "",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "patient: 我不知道。我只知道自己心电图上的T波高尖、双支对称和基底部狭窄。这些信息能帮助您确定心室肌细胞的动作电位异常发生在哪个时相吗？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 37,
+      "model_choice": "C",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 38,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 医生，我之前因为消化性溃疡做了胃大部切除术，最近确诊为缺铁性贫血。我觉得可能是手术影响了我身体对铁的吸收，导致了贫血。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 39,
+      "model_choice": "",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "patient: 医生，我只知道我突然感到胸骨后面非常痛，这种痛持续了5个小时，痛得我几乎无法呼吸。我不知道具体是什么原因，但希望您能告诉我。<|im_end|>\ndoctor: question: 请问这位患者的症状是什么？\n<|im_start|>user\n这位患者的主要症状是胸骨后剧痛，已经持续了5小时。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 40,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 医生，我之前做了上消化道X线钡餐造影，结果显示胃小弯侧有1.5cm的壁外龛影，大弯侧有痉挛性切迹。但我不确定这些发现是否足够明确我的病情。您看我是否还需要接受胃镜检查来进一步明确诊断呢？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 41,
+      "model_choice": "",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "patient: 我目前有发热的情况，但没有咳嗽。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 42,
+      "model_choice": "D",
+      "correct_answer": "A",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 43,
+      "model_choice": "",
+      "correct_answer": "A",
+      "is_correct": false,
+      "dialog": "patient: 医生，我 Lip 部和舌头都有撕裂伤，Lip 部出血很明显，您觉得应该用什么方法止血呢？我来的时候还在流血，挺担心的。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 44,
+      "model_choice": "",
+      "correct_answer": "A",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 45,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 目前我主要的健康问题是心前区疼痛，还有医生检查时能听到我的心包摩擦音，我的心率也比平时快。另外，我15天前发生过急性心肌梗死。不过，我的CPK没有增高。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 46,
+      "model_choice": "",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "patient: 是的，我有糖尿病，已经一年了。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 47,
+      "model_choice": "",
+      "correct_answer": "E",
+      "is_correct": false,
+      "dialog": "patient: 医生，我现在最明显的症状是左肩部肿痛，活动也受到了限制。我的左肩部在跌倒时着地受伤了。除此之外，我没有感觉到其他明显的症状，比如头痛、颈部僵硬或呼吸困难等。由于我有脑梗死病史，左侧肢体偏瘫，所以现在主要关注的是这次跌倒对左肩的影响。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 48,
+      "model_choice": "AA",
+      "correct_answer": "A",
+      "is_correct": false,
+      "dialog": "patient: 医生，我觉得我的关节疼痛似乎在晒太阳后会更严重。我查了一些资料，说紫外线可能是导致系统性红斑狼疮症状加剧的一个因素。所以我觉得紫外线可能是我关节疼痛加剧的主要原因。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 49,
+      "model_choice": "ABCDE",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "patient: 医生，您好。我是10岁的男生，最近6周我的阴囊部位出现了皮疹，还伴有瘙痒，这种瘙痒是阵发性的，有时候会特别痒，特别是到了晚上，症状会更严重。我身上其他地方的皮肤和黏膜都没有发黄，也没有看到风团。但是，我发现阴囊那里有些黄豆大小的结节，摸起来质地中等，按压时没有痛感。我不知道这些情况对诊断有没有帮助，但这些都是我注意到的情况。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 50,
+      "model_choice": "",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 51,
+      "model_choice": "B",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 52,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 您好，医生。我主要是间歇性鼻塞，这种情况已经持续了大约一年了，最近感觉鼻塞的症状逐渐加重。有时我会流一些黏液样的鼻涕，偶尔还会打喷嚏。除此之外，我没有其他明显的不适或过敏反应。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 53,
+      "model_choice": "A",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 54,
+      "model_choice": "",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "patient: 是的，我看过妇科医生。医生检查后告诉我宫颈光滑，但是宫体像怀孕3个月那么大，而且宫体表面凹凸不平，质地很硬。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 55,
+      "model_choice": "",
+      "correct_answer": "E",
+      "is_correct": false,
+      "dialog": "patient: 我就是那位患者，我在人工流产术中确实经历了腹痛、出冷汗以及血压下降的症状。这些症状让我感到非常不适，我希望医生能够帮助我了解这是怎么回事。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 56,
+      "model_choice": "",
+      "correct_answer": "E",
+      "is_correct": false,
+      "dialog": "patient: 医生，我6小时前确实出现了上腹剧痛，还伴有恶心和呕吐。我之前身体一直挺好，就是昨晚和朋友聚会，喝了不少酒。您觉得我这是怎么回事？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 57,
+      "model_choice": "",
+      "correct_answer": "A",
+      "is_correct": false,
+      "dialog": "patient: 我不知道具体的浓度，医生或护士在处理时没有告诉我。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 58,
+      "model_choice": "",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 59,
+      "model_choice": "",
+      "correct_answer": "A",
+      "is_correct": false,
+      "dialog": "patient: 是的，医生，我头顶的瘢痕上最近出现了一个菜花样包块，我有些担心这个是不是皮肤疾病。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 60,
+      "model_choice": "ABC",
+      "correct_answer": "A",
+      "is_correct": false,
+      "dialog": "patient: 我目前的身体状况还算稳定，就是肾衰竭的问题一直困扰着我。我准备进行透析治疗，但说实话，我对透析的具体过程和需要注意的事项了解得不多。有时候会感到有些担心和不安。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 61,
+      "model_choice": "",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "patient: 我今年19岁，已经过了青春期了。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 62,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 是的，我曾经怀孕过，但不幸的是，我有习惯性流产的历史。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 63,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 是的，我患有阿米巴痢疾已经有十五年了。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 64,
+      "model_choice": "ADC",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 65,
+      "model_choice": "ABCDE",
+      "correct_answer": "A",
+      "is_correct": false,
+      "dialog": "patient: 医生，我觉得我的学习成绩不好时找老师的原因，是因为我觉得老师可能没有把事情讲清楚，或者他们的方法不适合我。我总是觉得如果我成绩不好，多半是因为外界的因素，而不是我自己的问题。这和我固执的性格可能有点关系，但我没怎么想过它们之间具体的联系。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 66,
+      "model_choice": "",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "patient: 您好，我最近感觉身体状况不是很好。我本身体质就比较虚弱，经常感到疲劳，容易出虚汗，也很容易感冒。最近三年，我开始出现呼吸困难的情况，尤其是在做了一些活动之后，感觉气喘得更厉害了。有时候感觉呼气多吸气少，感觉很不舒服。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 67,
+      "model_choice": "C",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "patient: 医生，我家孩子虽然身体强壮，但因为他接触了家里的开放性肺结核病患者，我们都很担心。他目前没有任何不适的症状，胸部X线检查也正常。请问，我们现在应该怎么做呢？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 68,
+      "model_choice": "E",
+      "correct_answer": "CDE",
+      "is_correct": false,
+      "dialog": "patient: 医生，我不太清楚我现在是不是贫血期，但术后24小时我的皮瓣确实有些肿胀，颜色也有些发紫，伤口远端渗血也比较多，颜色稍发暗。这些症状是不是贫血的表现呢？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 69,
+      "model_choice": "E",
+      "correct_answer": "A",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 70,
+      "model_choice": "B",
+      "correct_answer": "B",
+      "is_correct": true,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 71,
+      "model_choice": "",
+      "correct_answer": "A",
+      "is_correct": false,
+      "dialog": "patient: 医生，我不是很清楚电镜检查的具体结果，我只知道肾穿刺活检显示肾小球基底膜明显增厚。至于具体的沉积物类型，我没有更多的信息。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 72,
+      "model_choice": "BCDE",
+      "correct_answer": "A",
+      "is_correct": false,
+      "dialog": "patient: 根据我了解的情况，引产后成功率可能与宫颈 Bishop评分、羊水量的多少、胎头下降情况、是否见红以及胎膜是否破裂有关。但是，根据我的实际情况，医生没有告诉我这些具体的细节。所以，我无法确定哪个因素对我的引产成功率影响最大。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 73,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 医生，我不是很清楚并发症的具体医学术语，但我可以告诉您我的症状。最近我的腹痛和腹胀都加重了，而且体温也再度升高了。这些症状让我感到非常不适。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 74,
+      "model_choice": "",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "patient: 医生，我面部的刀刺伤已经过去12小时了，刀口长度大约3厘米，深度大概是0.8厘米。我注意到伤口周围有些红肿，但没有明显的出血。请问现在我是否需要清创并进行缝合处理？我担心如果不及时处理，可能会导致感染或者其他并发症。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 75,
+      "model_choice": "BACDE",
+      "correct_answer": "E",
+      "is_correct": false,
+      "dialog": "patient: 医生，我看到您的解释，但我认为这里可能有些误解。我的症状包括反复高热、游走性关节痛、口腔溃疡和脱发，这些症状确实存在。但是，我的尿蛋白和尿颗粒管型的检查结果也异常，肾穿结果显示弥漫增殖型肾炎。根据这些信息，我觉得我的情况似乎更符合系统性红斑狼疮，而不是急性肾炎。您怎么看？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 76,
+      "model_choice": "",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 77,
+      "model_choice": "B",
+      "correct_answer": "A",
+      "is_correct": false,
+      "dialog": "patient: 医生，我听说在这种情况下，首要的处理措施是进行胃肠减压，是这样吗？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 78,
+      "model_choice": "ABCDE",
+      "correct_answer": "A",
+      "is_correct": false,
+      "dialog": "patient: 医生，我这边不太了解具体的医学诊断，但我可以提供一些我的症状细节。我这半年来一直感觉一侧咽喉部疼痛，而且疼痛有时候会放射到耳部。尤其是进食或饮水时，疼痛会加重。最近两天，我发现张口也变得困难了。体检时还发现了右侧扁桃体区有新生物。这些信息可能会对您的诊断有些帮助。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 79,
+      "model_choice": "ABCDEF",
+      "correct_answer": "ACDEF",
+      "is_correct": false,
+      "dialog": "patient: 医生，我不是很清楚腹腔镜检查的具体表现，我只是听说自己可能有多囊卵巢综合征。我没有更多的医疗背景信息可以提供。我不知道在腹腔镜下我的卵巢会有什么样的表现。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 80,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 我不知道。我只是一个2岁的女童，这些专业的医疗知识我不懂。您可以问我的医生，他们应该知道的。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 81,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 我之前在外院被诊断为二尖瓣有狭窄，但至于肺部疾病，我没有明确的病史。至于心脏相关的症状，我有时候会感觉心悸和气短，尤其是在活动后。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 82,
+      "model_choice": "",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 83,
+      "model_choice": "B",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 84,
+      "model_choice": "",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "patient: 医生，我之前不是很清楚，但经过您这么一说，我确实有口渴、夜尿增多的症状，而且检查时发现血糖升高，尿糖也是强阳性，这些都指向糖尿病吧？不过，经过胰岛素治疗后，我的情况改善了很多。所以，我是不是可以认为自己是糖尿病患者呢？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 85,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 是的，近半年来我确实不自主地挤眉弄眼和抽鼻。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 86,
+      "model_choice": "CC",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 87,
+      "model_choice": "",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "patient: 医生，我现在怀孕30周，被确诊为妊娠合并甲状腺功能亢进。我想知道，对于我这样的情况，首选的治疗方法是什么？<|im_end|>\ndoctor: question: 对于妊娠合并甲状腺功能亢进的孕妇来说，首选的治疗方法是什么？\n<|im_start|>user\n医生，我之前查过一些资料，但是具体用什么治疗方法最好还是请您告诉我，因为我对这些药物和治疗方法不太了解。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 88,
+      "model_choice": "C",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 89,
+      "model_choice": "B",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 医生，我看到您提供的选项，但我觉得我的情况可能不是压力性尿失禁。我的症状主要是尿频、尿急和尿痛，最近症状还加重了，伴有尿失禁的情况。我觉得更像是急迫性尿失禁。不知道我的理解对不对？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 90,
+      "model_choice": "E",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "patient: 医生，我觉得选项E（休克）并不符合我的情况。虽然我昨晚确实出现了右下腹痛和呕吐，但目前没有出现血压下降、心率加快或意识模糊的症状。根据您提到的阑尾炎的常见症状，我的症状确实与阑尾炎比较相似。不过，我也知道这需要进一步的检查来确诊。您看，下一步我们需要做什么检查呢？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 91,
+      "model_choice": "",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "patient: 我现在的症状和平时怀孕的感觉不太一样。我今天早上突然觉得非常冷，然后就开始发烧了，体温达到了39.5℃。我还觉得特别累，没有力气，有点恶心，还吐了。下腹部也不太舒服，特别是小便的时候感觉像是被火烧一样。这些症状让我很担心，不像我以前孕期的正常反应。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 92,
+      "model_choice": "",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 93,
+      "model_choice": "",
+      "correct_answer": "D",
+      "is_correct": false,
+      "dialog": "patient: 医生，我就是感觉呼吸有点困难，胸闷气短，但我不知道具体应该用什么药物或治疗方法。您能给我一些建议吗？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 94,
+      "model_choice": "",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "patient: 医生，我目前主要的症状是左下肢骨折，然后最近几天我出现了寒战和高热，发热是间歇性的。另外，我的四肢感觉特别冷，皮肤有些发绀，尿量也明显减少了，还有我感觉血压好像也下降了，有时候会出现休克的情况。这些症状让我非常担心，希望您能帮帮我。<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 95,
+      "model_choice": "C",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "",
+      "num_turns": 0
+    },
+    {
+      "sample_idx": 96,
+      "model_choice": "",
+      "correct_answer": "A",
+      "is_correct": false,
+      "dialog": "patient: 医生，我还没有进行手术，所以关于术后是否需要追加化疗的问题，我不太清楚。我目前的症状主要是大便次数增多、肛门坠胀感、里急后重，还有大便变细和常有粘液血便。这些症状在使用抗生素后有所缓解，但不久后又会复发，而且感觉症状在逐渐加重。我听说有些情况可能需要手术治疗，所以想先了解一下术后的治疗方案。您能给我一些建议吗？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 97,
+      "model_choice": "",
+      "correct_answer": "B",
+      "is_correct": false,
+      "dialog": "patient: 医生，我来是因为最近半年我的身体状况越来越差，出现了体重下降、腹泻和发热，而且我还反复出现口腔真菌感染。我自己查了一些资料，感觉这些症状跟艾滋病很像。我有不洁性交史，也曾经吸过毒，所以我很担心自己是不是得了艾滋病。请问医生，根据我的症状，我是不是有可能患有艾滋病？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 98,
+      "model_choice": "",
+      "correct_answer": "E",
+      "is_correct": false,
+      "dialog": "patient: 医生，我只知道我突然感到腹部疼痛，已经持续了2个小时，腹部感觉特别不舒服，而且按压时疼痛感更明显。除此之外，您查体时说我的肝脏在右肋下2cm处可以触及，肝脏质地感觉比较韧，还有触痛，肝区也有扣痛，腹部有弥漫性的压痛，还有腹水征阳性。您看，这些症状都提示了些什么呢？<|im_end|>\n",
+      "num_turns": 1
+    },
+    {
+      "sample_idx": 99,
+      "model_choice": "",
+      "correct_answer": "C",
+      "is_correct": false,
+      "dialog": "patient: 是的，我是男性。<|im_end|>\n",
+      "num_turns": 1
+    }
+  ],
+  "config": {
+    "model_path": "/root/Agentic-RAG-R1__under-construction/checkpoints/qwen2.5-32b-medqa-4GPU/2025-05-07/final",
+    "dataset_split": "train",
+    "eval_size": 100,
+    "batch_size": 1,
+    "max_new_tokens": 512,
+    "max_generate_iterations": 4,
+    "temperature": 0.7,
+    "do_sample": true
+  }
+}

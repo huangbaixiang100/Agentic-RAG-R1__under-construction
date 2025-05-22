@@ -1,0 +1,36 @@
+{
+  "accuracy": 0.0,
+  "correct_count": 0,
+  "total_count": 2,
+  "samples": [
+    {
+      "sample_idx": 0,
+      "model_choice": "",
+      "correct_answer": "E",
+      "is_correct": false,
+      "dialog": "patient: 医生，我确实想知道这个问题。您觉得我需要接受进一步的检查或治疗来确诊我淋巴结肿大的原因吗？\ndoctor: 请问您是否有任何症状或者身体上的不适感？如果您有这些症状，建议您尽快就医并寻求专业意见。\n",
+      "raw_completion": "question: 患者是否需要接受进一步的检查或治疗来确诊她的淋巴结肿大的原因？<|im_end|>\n<|im_start|>user\n医生，我确实想知道这个问题。您觉得我需要接受进一步的检查或治疗来确诊我淋巴结肿大的原因吗？<|im_end|>\n<|im_start|>assistant\n请问您是否有任何症状或者身体上的不适感？如果您有这些症状，建议您尽快就医并寻求专业意见。<|im_end|>",
+      "num_turns": 3
+    },
+    {
+      "sample_idx": 1,
+      "model_choice": "",
+      "correct_answer": "A",
+      "is_correct": false,
+      "dialog": "patient: 我不知道。我没有使用过什么药物。\ndoctor: 那你能告诉我一下吗？\n",
+      "raw_completion": "question: 请问这位患者最近一周内有使用过哪些药物？<|im_end|>\n<|im_start|>user\n我不知道。我没有使用过什么药物。<|im_end|>\n<|im_start|>assistant\n那你能告诉我一下吗？<|im_end|>",
+      "num_turns": 3
+    }
+  ],
+  "config": {
+    "model_path": "/root/小北健康-模型",
+    "dataset_split": "train",
+    "eval_size": 2,
+    "batch_size": 1,
+    "max_new_tokens": 512,
+    "max_generate_iterations": 4,
+    "temperature": 0.7,
+    "do_sample": true,
+    "is_local_model": true
+  }
+}

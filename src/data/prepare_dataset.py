@@ -4,15 +4,17 @@ from datasets import load_dataset
 #from src.data.prompt import build_prompt, build_system_tools
 from src.data.doctor_patient_prompts import *
 import json
+import logging
+import os
 
 from datasets import load_dataset, Dataset
 
 
-def prepare_dataset(split="train", name="gsm8k", eval_size=10):
+def prepare_dataset(split="train", name="gsm8k", eval_size=10, train_file=None, test_file=None):
     if name == "gsm8k":
         return prepare_dataset_gsm8k(split, eval_size)
     elif name == "cmb":
-        return prepare_dataset_cmb(split,eval_size)
+        return prepare_dataset_cmb(split, eval_size, train_file, test_file)
     elif name == "medmcqa":
         return prepare_dataset_medmcqa(split, eval_size)
     elif name == "medqa":
@@ -21,13 +23,57 @@ def prepare_dataset(split="train", name="gsm8k", eval_size=10):
         raise ValueError(f"Unknown dataset name: {name}")
 
 
-def prepare_dataset_cmb(split="train", eval_size=10):
-    with open('src/data/cmb_atomic_patient_test.json') as f:
+def prepare_dataset_cmb(split="train", eval_size=10, train_file=None, test_file=None):
+    """
+    加载CMB数据集
+    
+    Args:
+        split: 指定加载"train"训练集还是"test"测试集
+        eval_size: 已废弃参数，保留以兼容旧代码
+        train_file: 训练集文件路径，如果为None则使用默认路径
+        test_file: 测试集文件路径，如果为None则使用默认路径
+        
+    Returns:
+        tuple: 如果split为"train"，返回(train_dataset, empty_dataset)，
+              如果split为"test"，返回(empty_dataset, test_dataset)
+    """
+    # 设置默认数据文件路径
+    default_train_file = 'src/data/cmb_atomic_patient_train.json'
+    default_test_file = 'src/data/cmb_atomic_patient_test.json'
+    
+    # 使用提供的文件路径或默认路径
+    train_data_file = train_file if train_file else default_train_file
+    test_data_file = test_file if test_file else default_test_file
+    
+    # 根据split参数确定加载哪个数据文件
+    if split == "train" or split == "all":
+        data_file = train_data_file
+        logging.info(f"加载训练集数据: {data_file}")
+    elif split == "test" or split == "eval":
+        data_file = test_data_file
+        logging.info(f"加载测试集数据: {data_file}")
+    else:
+        raise ValueError(f"无效的split参数: {split}, 必须是'train'或'test'")
+    
+    # 检查文件是否存在
+    if not os.path.exists(data_file):
+        # 如果找不到指定的训练/测试文件，尝试使用默认文件
+        fallback_file = default_test_file if os.path.exists(default_test_file) else default_train_file
+        logging.warning(f"找不到数据文件: {data_file}, 回退使用: {fallback_file}")
+        data_file = fallback_file
+        
+    # 检查回退文件是否存在
+    if not os.path.exists(data_file):
+        raise FileNotFoundError(f"无法找到数据文件: {data_file}")
+        
+    # 加载数据文件
+    logging.info(f"正在加载数据文件: {data_file}")
+    with open(data_file) as f:
         data = json.load(f)
 
-    formatted_data=[]
+    formatted_data = []
 
-    for idx,example in enumerate(data):
+    for idx, example in enumerate(data):
         partial_question = '，'.join(example['facts'][:int(len(example['facts']) / 2)]) + '。' + example['atomic_question']
         option_str = "\n".join([f"{key}: {value}" for key, value in example['option'].items()])
         prompt_str = doctor_system_prompt.format(question_type=example['question_type'], question=partial_question,
@@ -36,18 +82,27 @@ def prepare_dataset_cmb(split="train", eval_size=10):
                 "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"
                 "<|im_start|>user\n" + prompt_str + "\n<|im_end|>\n<|im_start|>assistant\n"
         )
-        formatted_example={
+        formatted_example = {
             "id": idx + 1,
-            'prompt':final_prompt,
-            'facts':example['facts'],
-            'answer':example['answer'],
-            'option':example['option']
+            'prompt': final_prompt,
+            'facts': example['facts'],
+            'answer': example['answer'],
+            'option': example['option']
         }
         formatted_data.append(formatted_example)
 
     dataset = Dataset.from_list(formatted_data)
 
-    return dataset
+    # 创建空数据集，以保持接口兼容性
+    empty_dataset = Dataset.from_list([])
+    
+    # 根据split参数决定返回哪个数据集
+    if split == "train" or split == "all":
+        logging.info(f"训练集大小: {len(dataset)}")
+        return dataset, empty_dataset
+    else:
+        logging.info(f"测试集大小: {len(dataset)}")
+        return empty_dataset, dataset
 
 
 def prepare_dataset_gsm8k(split="train", eval_size=10):
