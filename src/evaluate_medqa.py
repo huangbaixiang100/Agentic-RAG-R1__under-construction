@@ -27,7 +27,7 @@ logging.basicConfig(
     ]
 )
 
-def evaluate_model_on_cmb(
+def evaluate_model_on_medqa(
     model_path: str,
     dataset_split: str = "test",
     num_samples: int = 100,
@@ -44,7 +44,7 @@ def evaluate_model_on_cmb(
     start_sample: int = 0,
 ):
     """
-    评估模型在CMB数据集上的表现
+    评估模型在MedQA数据集上的表现
     
     Args:
         model_path: 模型路径
@@ -149,7 +149,6 @@ def evaluate_model_on_cmb(
             except Exception as e2:
                 logging.error(f"备用加载方法也失败: {str(e2)}")
                 raise RuntimeError(f"无法加载模型，请检查路径是否正确，并确保包含所有必要的模型文件。\n原始错误: {str(e)}\n备用错误: {str(e2)}")
-            
     except Exception as e:
         logging.error(f"加载模型时发生错误: {str(e)}")
         raise
@@ -163,10 +162,10 @@ def evaluate_model_on_cmb(
         logging.info(f"使用自定义测试集文件: {test_file}")
     
     # 加载数据集 - 使用修改后的prepare_dataset函数直接加载指定数据集
-    print(f"加载CMB数据集 (split={dataset_split})")
+    print(f"加载MedQA数据集 (split={dataset_split})")
     train_dataset, eval_dataset = prepare_dataset(
         dataset_split, 
-        "cmb", 
+        "medqa", 
         eval_size=0,  # eval_size参数不再使用
         train_file=train_file,
         test_file=test_file
@@ -210,11 +209,12 @@ def evaluate_model_on_cmb(
     for batch_idx, batch in enumerate(tqdm(dataloader, desc="评估批次")):
         prompts = batch["prompt"]
         answers = batch["answer"]
-        facts = batch["facts"]
+        atomic_facts = batch["atomic_facts"]
         options = batch["option"]
+        answer_texts = batch.get("answer_text", [None] * len(answers))  # 获取具体答案内容
         
-        # 为每个样本创建PatientModel
-        patient_models = [PatientModel(f) for f in facts]
+        # 为每个样本创建PatientModel（使用atomic_facts）
+        patient_models = [PatientModel(f) for f in atomic_facts]
         
         logging.info("="*80)
         logging.info(f"批次 {batch_idx+1}/{len(dataloader)}")
@@ -238,12 +238,14 @@ def evaluate_model_on_cmb(
         completion_texts = tokenizer.batch_decode(completion_ids, skip_special_tokens=False)
         
         # 分析结果
-        for i, (completion, answer, option) in enumerate(zip(completion_texts, answers, options)):
+        for i, (completion, answer, option, answer_text) in enumerate(zip(completion_texts, answers, options, answer_texts)):
             # 将批处理索引转换为总体索引，并加上起始样本偏移
             sample_idx = start_sample + batch_idx * batch_size + i
             
             logging.info("-"*80)
-            logging.info(f"样本 {sample_idx}, 正确答案: {answer}")
+            logging.info(f"样本 {sample_idx}, 正确答案选项: {answer}")
+            if answer_text:
+                logging.info(f"正确答案内容: {answer_text}")
             
             # 解析对话
             try:
@@ -282,6 +284,7 @@ def evaluate_model_on_cmb(
                     "sample_idx": sample_idx,
                     "model_choice": model_choice,
                     "correct_answer": answer,
+                    "correct_answer_text": answer_text,
                     "is_correct": correct,
                     "dialog": formatted_dialog,
                     "raw_completion": completion,
@@ -289,11 +292,11 @@ def evaluate_model_on_cmb(
                 }
                 all_results.append(result)
                 
-                # 分析对话中的问题和回答标记（添加安全检查）
+                # 分析对话中的问题和回答标记
                 has_question = any("question:" in turn["content"].lower() or "问题:" in turn["content"].lower() 
-                                 for turn in dialog if turn["role"] == "assistant" and turn.get("content") is not None)
+                                 for turn in dialog if turn["role"] == "assistant")
                 has_answer = any("answer:" in turn["content"].lower() or "回答:" in turn["content"].lower() or "答案:" in turn["content"].lower() 
-                               for turn in dialog if turn["role"] == "assistant" and turn.get("content") is not None)
+                               for turn in dialog if turn["role"] == "assistant")
                 
                 logging.info(f"对话分析: 包含问题标记={has_question}, 包含回答标记={has_answer}")
                 
@@ -305,6 +308,8 @@ def evaluate_model_on_cmb(
                     "sample_idx": sample_idx,
                     "error": str(e),
                     "completion": completion,
+                    "correct_answer": answer,
+                    "correct_answer_text": answer_text,
                 }
                 all_results.append(result)
         
@@ -324,7 +329,7 @@ def evaluate_model_on_cmb(
     test_name = os.path.basename(test_file).split('.')[0] if test_file else "default_test"
     dataset_identifier = train_name if dataset_split == "train" else test_name
     
-    results_file = os.path.join(output_dir, f"cmb_{dataset_split}_{dataset_identifier}_results_{len(dataset)}.json")
+    results_file = os.path.join(output_dir, f"medqa_{dataset_split}_{dataset_identifier}_results_{len(dataset)}.json")
     with open(results_file, "w", encoding="utf-8") as f:
         json.dump(
             {
@@ -358,11 +363,12 @@ def evaluate_model_on_cmb(
     # 返回总准确率
     return accuracy
 
+
 def main():
-    parser = argparse.ArgumentParser(description="评估模型在CMB数据集上的表现")
+    parser = argparse.ArgumentParser(description="评估模型在MedQA数据集上的表现")
     parser.add_argument("--model_path", type=str, required=True, help="模型路径")
-    parser.add_argument("--dataset_split", type=str, default="test", choices=["train", "test", "eval", "all"], 
-                        help="指定数据集类型: train-训练集, test/eval-测试集, all-全部数据")
+    parser.add_argument("--dataset_split", type=str, default="test", choices=["train", "test", "eval", "all"],
+                        help="数据集分割")
     parser.add_argument("--num_samples", type=int, default=None, help="评估样本数量，None表示使用全部样本")
     parser.add_argument("--batch_size", type=int, default=4, help="批处理大小")
     parser.add_argument("--max_new_tokens", type=int, default=512, help="最大生成token数")
@@ -379,36 +385,46 @@ def main():
     
     args = parser.parse_args()
     
-    # 配置日志文件
-    file_handler = logging.FileHandler(args.log_file)
-    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-    logging.getLogger().addHandler(file_handler)
+    # 设置日志文件
+    if args.log_file:
+        # 移除现有的处理器
+        for handler in logging.root.handlers[:]:
+            logging.root.removeHandler(handler)
+        
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.StreamHandler(),
+                logging.FileHandler(args.log_file)
+            ]
+        )
     
-    logging.info("="*80)
-    logging.info(f"开始评估模型: {args.model_path}")
-    logging.info(f"配置: 数据集={args.dataset_split}, 样本数={args.num_samples or '全部'}, 批大小={args.batch_size}")
-    if args.train_file:
-        logging.info(f"自定义训练集文件: {args.train_file}")
-    if args.test_file:
-        logging.info(f"自定义测试集文件: {args.test_file}")
-    logging.info(f"生成配置: max_tokens={args.max_new_tokens}, iterations={args.max_generate_iterations}, temp={args.temperature}, do_sample={not args.no_sample}")
-    
-    evaluate_model_on_cmb(
-        model_path=args.model_path,
-        dataset_split=args.dataset_split,
-        num_samples=args.num_samples,
-        batch_size=args.batch_size,
-        max_new_tokens=args.max_new_tokens,
-        max_generate_iterations=args.max_generate_iterations,
-        temperature=args.temperature,
-        do_sample=not args.no_sample,
-        device=args.device,
-        output_dir=args.output_dir,
-        is_local_model=args.local_model,
-        train_file=args.train_file,
-        test_file=args.test_file,
-        start_sample=args.start_sample,
-    )
+    # 运行评估
+    try:
+        accuracy = evaluate_model_on_medqa(
+            model_path=args.model_path,
+            dataset_split=args.dataset_split,
+            num_samples=args.num_samples,
+            batch_size=args.batch_size,
+            max_new_tokens=args.max_new_tokens,
+            max_generate_iterations=args.max_generate_iterations,
+            temperature=args.temperature,
+            do_sample=not args.no_sample,
+            device=args.device,
+            output_dir=args.output_dir,
+            is_local_model=args.local_model,
+            train_file=args.train_file,
+            test_file=args.test_file,
+            start_sample=args.start_sample,
+        )
+        
+        print(f"评估完成，准确率: {accuracy:.4f}")
+        
+    except Exception as e:
+        logging.error(f"评估过程中出现错误: {str(e)}")
+        raise
+
 
 if __name__ == "__main__":
     main() 

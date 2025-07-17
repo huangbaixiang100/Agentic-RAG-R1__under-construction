@@ -3,45 +3,46 @@ project:
   description: "under-construction"
 
 experiment:
-  name: "qwen2.5-32b-medqa-4GPU"  # 实验名称，对应 experiments/ 下的目录
+  name: "promed-qwen25-1.5b-correctness-reward72-softmax"  # 实验名称，对应 experiments/ 下的目录
   random_seed: 42
 
 # SwanLab配置
 swanlab: true
 
 model:
-  #name: "Qwen/Qwen2.5-0.5B-Instruct"
-  name: "/home/xiaobei/小北健康-qwen2.5-7b"
+  #name: "Qwen/Qwen2.5-1.5B-Instruct"  # 基础模型名称，不变
+  #name: "/home/xiaobei/小北健康-qwen2.5-7b"
+  name: "/data/xiaobei/dhx/LLaMA-Factory-main-new/models/promed-qwen2.5-1.5b-sft-3epoch-merged"
   torch_dtype: "bfloat16"
   device_map: null
 
 dataset:
   name: "cmb"
-  # name: "medmcqa"
   num_eval: 100
 
 training:
   continue_training: false
-  current_step: 0
+  current_step: 645
 
-  use_lora: true
-  use_quant: true
+  use_lora: false
+  use_quant: false  # 全参数微调时建议关闭量化以获得更好效果
   batch_size: 1
-  learning_rate: 0.000005
-  num_iterations: 10 # epoch
+  learning_rate: 0.000001  # 全参数微调使用更低的学习率
+  num_iterations: 40 # epoch
   steps_per_iteration: 5 # in one epoch
-  save_interval: 5 # steps
+  save_interval: 50 # steps
 
   generation:
     num_generations: 4
-    max_new_tokens: 200
-    max_length_for_gather: 100000
-    max_generate_iterations: 10
+    max_new_tokens: 256  # 减少生成长度，避免失控
+    max_length_for_gather: 8192  # 减少最大长度
+    max_generate_iterations: 10   # 减少轮数
     temperature: 0.7
     do_sample: True
   
   optimizer:
     beta: 0.04
+  #beta: 0
     mu: 1
     epsilon: 0.1
 
@@ -56,18 +57,9 @@ lora:
   task_type: "CAUSAL_LM"
 
 qlora:
-  load_in_4bit: True           # zero 2 可以为True； zero 3必须为False
+  load_in_4bit: True           # zero 2 可以为True
   bnb_4bit_quant_type: "nf4"
   bnb_4bit_compute_dtype: "bfloat16"
-  bnb_4bit_use_double_quant: True   # zero 2 可以为True； zero 3必须为False
-  load_in_8bit: False    # enable 8bit quantization  ； zero 3可以为True
-  llm_int8_threshold: 6.0   # if load_in_8bit is True ； zero 3可以为True
-
-  ### This is the suggested for zero 2 -- reference：https://huggingface.co/docs/accelerate/v1.6.0/en/package_reference/utilities#accelerate.utils.BnbQuantizationConfig
-  # qlora:
-  # load_in_4bit: True           # zero 2 可以为True； zero 3必须为False
-  # bnb_4bit_quant_type: "nf4"
-  # bnb_4bit_compute_dtype: "bfloat16"
-  # bnb_4bit_use_double_quant: True   # zero 2 可以为True； zero 3必须为False
-  # load_in_8bit: False    # enable 8bit quantization  ； zero 3可以为True
-  # llm_int8_threshold: 6.0   # if load_in_8bit is True ； zero 3可以为True
+  bnb_4bit_use_double_quant: True   # zero 2 可以为True
+  load_in_8bit: False    # enable 8bit quantization
+  llm_int8_threshold: 6.0   # if load_in_8bit is True

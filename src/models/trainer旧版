@@ -11,7 +11,7 @@ from accelerate import Accelerator
 from peft import (PeftModel, get_peft_model_state_dict, LoraConfig, 
                   get_peft_model)
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from src.models.doctor_reward import overall_reward, overall_reward_with_token_allocation
+from src.models.doctor_reward import overall_reward
 from src.utils.utils import optimize_model_memory
 from src.utils.patient_model import PatientModel
 try:
@@ -24,119 +24,6 @@ except ImportError:
     BnbQuantizationConfig = None
     load_and_quantize_model = None
 
-
-def _is_poor_quality_generation(text: str) -> bool:
-    """
-    检测生成文本质量是否过差（包含过多重复内容）
-    """
-    if not text or len(text.strip()) == 0:
-        return True
-    
-    # 检测重复字符的比例
-    char_counts = {}
-    for char in text:
-        char_counts[char] = char_counts.get(char, 0) + 1
-    
-    # 如果某个字符出现次数超过总长度的30%，认为质量差
-    max_char_ratio = max(char_counts.values()) / len(text)
-    if max_char_ratio > 0.3:
-        return True
-    
-    # 检测重复短语（连续相同的词）
-    words = text.split()
-    if len(words) > 10:
-        consecutive_same = 0
-        max_consecutive = 0
-        for i in range(1, len(words)):
-            if words[i] == words[i-1]:
-                consecutive_same += 1
-                max_consecutive = max(max_consecutive, consecutive_same)
-            else:
-                consecutive_same = 0
-        
-        # 如果连续相同词超过5个，认为质量差
-        if max_consecutive > 5:
-            return True
-    
-    # 检测过度重复的短语或句子
-    if len(text) > 50:
-        common_repeat_patterns = [
-            r'(.{2,10})\1{3,}',  # 短语重复3次以上
-            r'([，。？！])\1{5,}',  # 标点符号重复5次以上
-            r'([a-zA-Z]+)\s+\1\s+\1',  # 英文单词重复3次
-        ]
-        
-        import re
-        for pattern in common_repeat_patterns:
-            if re.search(pattern, text):
-                return True
-    
-    return False
-
-
-def extract_atomic_questions_from_batch(
-    batch_samples: Dict[str, List[Any]], 
-    num_generations: int
-) -> List[str]:
-    """
-    从batch数据中提取原子问题，用于Shapley值计算
-    
-    这个函数支持用户期望的Shapley流程：
-    在对话生成之前就确定要评估的原子问题
-    
-    Args:
-        batch_samples: 包含prompt、question、answer等的batch数据
-        num_generations: 每个prompt的生成数量
-        
-    Returns:
-        重复扩展后的原子问题列表
-    """
-    try:
-        # 尝试从batch中获取question字段
-        if 'question' in batch_samples:
-            questions = batch_samples['question']
-        elif 'atomic_question' in batch_samples:
-            questions = batch_samples['atomic_question']
-        else:
-            # 如果没有明确的question字段，尝试从prompt中解析
-            logging.warning(
-                "未找到question字段，尝试从prompt中解析原子问题"
-            )
-            questions = []
-            for prompt in batch_samples.get('prompt', []):
-                # 简单的问题提取逻辑，可以根据实际数据格式调整
-                if '问题：' in prompt:
-                    question_part = (
-                        prompt.split('问题：')[-1].split('\n')[0].strip()
-                    )
-                    questions.append(question_part)
-                elif '问题:' in prompt:
-                    question_part = (
-                        prompt.split('问题:')[-1].split('\n')[0].strip()
-                    )
-                    questions.append(question_part)
-                else:
-                    # 默认问题
-                    questions.append("请根据患者信息进行诊断")
-        
-        # 根据num_generations重复扩展
-        repeated_questions = []
-        for question in questions:
-            repeated_questions.extend([question] * num_generations)
-        
-        logging.info(
-            f"成功提取{len(questions)}个原子问题，"
-            f"扩展为{len(repeated_questions)}个"
-        )
-        return repeated_questions
-        
-    except Exception as e:
-        logging.error(f"提取原子问题失败: {e}")
-        # 返回默认问题
-        default_question = "请根据患者信息进行诊断"
-        prompt_count = len(batch_samples.get('prompt', []))
-        total_questions = prompt_count * num_generations
-        return [default_question] * total_questions
 
 
 def create_completion_mask(
@@ -325,11 +212,10 @@ def generate_completions_multi_round(
     current_mask = prompt_mask.clone()
 
     should_gen = torch.ones(batch_size, dtype=torch.bool, device=device)
-    # 完整的prompt+所有生成内容
-    final_outputs: List[Optional[torch.LongTensor]] = [None] * batch_size
-    completion_texts = [""] * batch_size
+    final_outputs: List[Optional[torch.LongTensor]] = [None] * batch_size #完整的prompt+所有生成内容
+    completion_texts=[""] * batch_size
 
-    # 同一个batch里不同sample一起decode，需要注意padding，每轮生成完之后重新pad
+    #同一个batch里不同sample一起decode，需要注意padding，每轮生成完之后重新pad
     for round_idx in range(max_generate_iterations):
         print("=" * 80)
         print(f"[Round {round_idx + 1}/{max_generate_iterations}] Start")
@@ -351,8 +237,6 @@ def generate_completions_multi_round(
             temperature=temperature,
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id,
-            repetition_penalty=1.1,  # 添加重复惩罚
-            no_repeat_ngram_size=3,  # 防止3-gram重复
         )
 
         old_len = current_ids.size(1)
@@ -376,17 +260,7 @@ def generate_completions_multi_round(
             b = active[idx].item()
             print(f"\n[Sample {b}] Generated text: {repr(text)}")
 
-            # 检测生成质量 - 如果包含过多重复内容，标记为无效
-            if _is_poor_quality_generation(text):
-                print(f"[Warning] Sample {b} generated poor quality text, stopping generation")
-                completion_texts[b] += "<invalid_generation>"
-                merged_text = history_texts[idx] + "<invalid_generation>"
-                final_outputs[b] = tokenizer.encode(merged_text, add_special_tokens=False, return_tensors="pt").to(
-                    device).squeeze(0)
-                should_gen[b] = False
-                continue
-
-            merged_text = history_texts[idx]
+            merged_text = history_texts[idx] #merged_text中没有额外的padding
 
             # Step2: Check answer or no question
             if "answer:" in text:
@@ -435,37 +309,17 @@ def generate_completions_multi_round(
     prompt_len = prompt_ids.size(1)  # 统一固定的prompt长度
     allowed_completion_len = max_length_for_gather - prompt_len
 
-    print("🔍 ===== generate_completions_multi_round调试信息 =====")
-    print(f"📏 prompt_len: {prompt_len}")
-    print(f"📏 max_length_for_gather: {max_length_for_gather}")
-    print(f"📏 allowed_completion_len: {allowed_completion_len}")
-    print(f"📏 原始completion_ids形状: {completion_ids.shape}")
-    
-    # 显示每个样本的completion_texts信息
-    for i, text in enumerate(completion_texts):
-        original_tokens = tokenizer.encode(text, add_special_tokens=False)
-        print(f"📄 Sample {i}: completion_text长度={len(text)}字符, 原始token数={len(original_tokens)}")
-
     if completion_ids.size(1) > allowed_completion_len:
         # 统一裁剪到 allowed_completion_len
-        print(f"🔧 裁剪completion_ids从{completion_ids.size(1)}到{allowed_completion_len}")
         completion_ids = completion_ids[:, :allowed_completion_len]
-        print(f"✅ 裁剪后completion_ids形状: {completion_ids.shape}")
-    else:
-        print(f"✅ completion_ids无需裁剪，保持形状: {completion_ids.shape}")
 
     for b in range(batch_size):
-        print(f"🎭 为样本{b}创建completion_mask...")
         mask = create_completion_mask(
             completion_ids[b],
             tokenizer,
         )
-        print(f"📊 样本{b}的mask: 长度={len(mask)}, 非零数量={mask.sum().item()}")
         completion_masks.append(mask)
     completion_masks = torch.stack(completion_masks, dim=0)
-    
-    print(f"🎯 最终completion_masks形状: {completion_masks.shape}")
-    print("=" * 60)
 
     return prompt_ids, prompt_mask, completion_ids,  completion_masks
 
@@ -859,16 +713,9 @@ def maximize_grpo_objective(
     beta: float,
     epsilon: float,
     accelerator: Accelerator,
-    use_shapley: bool = False,  # 新增参数：是否使用Shapley值加权
-    atomic_questions: List[str] = None,  # 新增参数：原子问题列表
-    use_token_level: bool = False,  # 新增参数：是否使用token级奖励分配
-    alpha: float = 2.0,  # 过程奖励权重
-    beta_reward: float = 1.0,  # 结果奖励权重
-    gamma: float = 3.0,  # 最终答案奖励
 ) -> Tuple[float, float, Dict[str, Any]]:
     """
     Perform a single GRPO update step, computing loss and backpropagating.
-    支持token级奖励分配的增强版本。
 
     Args:
         model (torch.nn.Module): Policy model.
@@ -880,12 +727,6 @@ def maximize_grpo_objective(
         beta (float): KL penalty coefficient.
         epsilon (float): Clipping parameter.
         accelerator (Accelerator): For distributed training.
-        use_shapley (bool): Whether to use Shapley value weighting for fact scores.
-        atomic_questions (List[str]): List of atomic questions for Shapley calculation.
-        use_token_level (bool): Whether to use token-level reward allocation.
-        alpha (float): Process reward weight.
-        beta_reward (float): Result reward weight. 
-        gamma (float): Final answer reward weight.
 
     Returns:
         Tuple[float, float, Dict[str, Any]]: Loss value, average reward, full reward dict.
@@ -901,115 +742,24 @@ def maximize_grpo_objective(
     curr_lp = compute_log_probabilities(model, input_ids, attention_mask, k)
     ratio = torch.exp(curr_lp - old_lp)
 
-    # 根据配置调用不同的奖励函数
-    if use_token_level:
-        # 使用token级奖励分配
-        from src.models.doctor_reward import overall_reward_with_token_allocation
-        
-        # 🔧 修复：传递截断长度以保持与completion_mask一致
-        completion_length = rollout_data["completion_mask"].size(1) if rollout_data["completion_mask"].dim() > 1 else len(rollout_data["completion_mask"])
-        
-        print("🔍 ===== Token级奖励分配调试信息 =====")
-        print(f"📏 completion_mask形状: {rollout_data['completion_mask'].shape}")
-        print(f"📏 input_ids形状: {rollout_data['input_ids'].shape}")
-        print(f"📏 logits_to_keep: {k}")
-        print(f"📏 completion_length: {completion_length}")
-        print(f"📋 batch数量: {len(rollout_data['formatted_completions'])}")
-        
-        # 检查每个completion的原始文本长度
-        for i, completion_list in enumerate(rollout_data['formatted_completions']):
-            for j, completion_dict in enumerate(completion_list):
-                content = completion_dict.get('content', '')
-                tokens = tokenizer.encode(content, add_special_tokens=False)
-                print(f"📄 Sample {i}-{j}: 原始文本长度={len(tokens)}, 内容前50字符='{content[:50]}...'")
-        
-        rewards_dict = overall_reward_with_token_allocation(
-            model=model,
-            tokenizer=tokenizer,
-            facts=rollout_data["repeated_facts"],
-            completions=rollout_data["formatted_completions"],
-            options=rollout_data["repeated_options"],
-            answers=rollout_data["repeated_answers"],
-            use_shapley=use_shapley,
-            atomic_questions=atomic_questions,
-            use_token_level=True,
-            alpha=alpha,
-            beta=beta_reward,
-            gamma=gamma,
-            max_completion_length=completion_length  # 🔧 传递截断长度
-        )
-        
-        # 处理token级奖励
-        if "token_rewards" in rewards_dict:
-            print("🎯 使用token级奖励分配模式")
-            token_rewards_list = rewards_dict["token_rewards"]
-            
-            print(f"📊 token_rewards_list长度: {len(token_rewards_list)}")
-            for i, token_rewards in enumerate(token_rewards_list):
-                print(f"📊 Sample {i}: token_rewards长度={len(token_rewards)}")
-            
-            # 将token级奖励转换为tensor并对齐到正确的长度
-            batch_size = input_ids.size(0)
-            max_length = input_ids.size(1)
-            
-            print(f"📏 创建token_rewards_tensor: batch_size={batch_size}, max_length={max_length}")
-            
-            # 创建token级奖励tensor
-            token_rewards_tensor = torch.zeros_like(input_ids, dtype=torch.float32, device=curr_lp.device)
-            
-            for i, token_rewards in enumerate(token_rewards_list):
-                if i < batch_size:
-                    # 对齐奖励长度到输入序列长度
-                    reward_length = min(len(token_rewards), max_length)
-                    print(f"📏 Sample {i}: 奖励对齐 {len(token_rewards)} -> {reward_length}")
-                    token_rewards_tensor[i, :reward_length] = torch.tensor(
-                        token_rewards[:reward_length], dtype=torch.float32, device=curr_lp.device
-                    )
-            
-            # 使用token级奖励计算advantage
-            print(f"📊 Token奖励统计 - 均值: {token_rewards_tensor.mean():.4f}, 标准差: {token_rewards_tensor.std():.4f}")
-            print(f"📏 准备计算advantage: token_rewards_tensor形状={token_rewards_tensor.shape}, completion_mask形状={comp_mask.shape}")
-            
-            # 计算token级advantage
-            # 这里我们需要重新设计advantage计算，因为现在每个token有不同的奖励
-            adv = compute_token_level_advantages(token_rewards_tensor, rollout_data["num_generations"], comp_mask)
-            
-        else:
-            print("⚠️ Token级奖励计算失败，回退到全局奖励")
-            # 回退到全局奖励
-            rewards = torch.tensor(rewards_dict["total_scores"], dtype=torch.float32, device=curr_lp.device)
-            adv = compute_group_relative_advantages(rewards, rollout_data["num_generations"])
-            
-    else:
-        # 传统全局奖励模式
-        if use_shapley and atomic_questions:
-            rewards_dict = reward_function(
-                model=model,
-                tokenizer=tokenizer,
-                facts=rollout_data["repeated_facts"],
-            completions=rollout_data["formatted_completions"],
-            options=rollout_data["repeated_options"],
-            answers=rollout_data["repeated_answers"],
-            use_shapley=True,
-            atomic_questions=atomic_questions
-            )
-        else:
-            rewards_dict = reward_function(
-                model=model,
-                tokenizer=tokenizer,
-                facts=rollout_data["repeated_facts"],
-            completions=rollout_data["formatted_completions"],
-            options=rollout_data["repeated_options"],
-            answers=rollout_data["repeated_answers"],
-            use_shapley=False
-        )
+    # rewards_dict = reward_function(
+    #     prompts=rollout_data["repeated_prompts"],
+    #     completions=rollout_data["formatted_completions"],
+    #     answers=rollout_data["repeated_answers"],
+    # )
+    rewards_dict = reward_function(
+        model=model,  # 添加模型参数
+        tokenizer=tokenizer,  # 添加tokenizer参数
+        facts=rollout_data["repeated_facts"],  # 使用facts而不是prompts
+        completions=rollout_data["formatted_completions"],
+        options=rollout_data["repeated_options"],  # 添加options参数
+        answers=rollout_data["repeated_answers"],
+    )
     
     rewards = torch.tensor(rewards_dict["total_scores"], dtype=torch.float32, device=curr_lp.device)
+    avg_reward = float(rewards.mean())
+
     adv = compute_group_relative_advantages(rewards, rollout_data["num_generations"])
-    
-    avg_reward = float(rewards_dict.get("total_scores", [0])[0] if "total_scores" in rewards_dict else 0)
-    
-    # GRPO loss计算
     surr1 = ratio * adv
     surr2 = torch.clamp(ratio, 1 - epsilon, 1 + epsilon) * adv
     surr = torch.min(surr1, surr2)
@@ -1022,108 +772,6 @@ def maximize_grpo_objective(
     accelerator.backward(loss)
     optimizer.step()
     return float(loss), avg_reward, rewards_dict
-
-
-def compute_token_level_advantages(
-    token_rewards: torch.Tensor, 
-    num_generations: int,
-    completion_mask: torch.Tensor
-) -> torch.Tensor:
-    """
-    计算token级别的advantage
-    
-    Args:
-        token_rewards: [batch_size, seq_len] token级奖励
-        num_generations: 每个prompt的生成数量
-        completion_mask: [batch_size, seq_len] completion掩码
-        
-    Returns:
-        torch.Tensor: token级advantage
-    """
-    print("🔍 ===== compute_token_level_advantages调试信息 =====")
-    print(f"📏 输入token_rewards形状: {token_rewards.shape}")
-    print(f"📏 输入completion_mask形状: {completion_mask.shape}")
-    print(f"📏 num_generations: {num_generations}")
-    
-    batch_size_rewards, seq_len_rewards = token_rewards.shape
-    batch_size_mask, seq_len_mask = completion_mask.shape
-    
-    print(f"📊 token_rewards: batch_size={batch_size_rewards}, seq_len={seq_len_rewards}")
-    print(f"📊 completion_mask: batch_size={batch_size_mask}, seq_len={seq_len_mask}")
-    
-    # 确保batch_size匹配
-    if batch_size_rewards != batch_size_mask:
-        raise ValueError(f"token_rewards和completion_mask的batch_size不匹配: {batch_size_rewards} vs {batch_size_mask}")
-    
-    # 如果序列长度不匹配，需要对齐
-    if seq_len_rewards != seq_len_mask:
-        print(f"⚠️ 检测到长度不匹配: token_rewards({seq_len_rewards}) vs completion_mask({seq_len_mask})")
-        
-        # 使用较短的长度来截断
-        min_seq_len = min(seq_len_rewards, seq_len_mask)
-        
-        print(f"🔧 将长度对齐到: {min_seq_len}")
-        
-        # 截断到相同长度
-        token_rewards_orig = token_rewards.clone()
-        completion_mask_orig = completion_mask.clone()
-        
-        token_rewards = token_rewards[:, :min_seq_len]
-        completion_mask = completion_mask[:, :min_seq_len]
-        
-        print(f"✅ 对齐后token_rewards形状: {token_rewards.shape}")
-        print(f"✅ 对齐后completion_mask形状: {completion_mask.shape}")
-        
-        # 显示截断信息
-        for i in range(min(3, batch_size_rewards)):  # 只显示前3个样本
-            orig_reward_nonzero = (token_rewards_orig[i] != 0).sum().item()
-            new_reward_nonzero = (token_rewards[i] != 0).sum().item()
-            orig_mask_nonzero = (completion_mask_orig[i] != 0).sum().item() 
-            new_mask_nonzero = (completion_mask[i] != 0).sum().item()
-            print(f"📊 Sample {i}: 非零奖励 {orig_reward_nonzero}->{new_reward_nonzero}, 非零mask {orig_mask_nonzero}->{new_mask_nonzero}")
-        
-        seq_len = min_seq_len
-    else:
-        print("✅ 长度匹配，无需对齐")
-        seq_len = seq_len_rewards
-    
-    batch_size = batch_size_rewards
-    
-    print(f"🎯 最终处理形状: batch_size={batch_size}, seq_len={seq_len}")
-    
-    # 重塑为[num_prompts, num_generations, seq_len]
-    num_prompts = batch_size // num_generations
-    print(f"📊 计算参数: num_prompts={num_prompts}, num_generations={num_generations}")
-    
-    reshaped_rewards = token_rewards.view(num_prompts, num_generations, seq_len)
-    reshaped_mask = completion_mask.view(num_prompts, num_generations, seq_len)
-    
-    print(f"📏 重塑后rewards形状: {reshaped_rewards.shape}")
-    print(f"📏 重塑后mask形状: {reshaped_mask.shape}")
-    
-    # 计算每个token位置的baseline（平均奖励）
-    masked_rewards = reshaped_rewards * reshaped_mask
-    token_count = reshaped_mask.sum(dim=1, keepdim=True)  # [num_prompts, 1, seq_len]
-    token_count = torch.clamp(token_count, min=1)  # 避免除零
-    
-    baseline = masked_rewards.sum(dim=1, keepdim=True) / token_count  # [num_prompts, 1, seq_len]
-    
-    print(f"📊 计算baseline: masked_rewards总和={masked_rewards.sum():.4f}")
-    print(f"📊 token_count范围: min={token_count.min()}, max={token_count.max()}")
-    print(f"📊 baseline统计: mean={baseline.mean():.4f}, std={baseline.std():.4f}")
-    
-    # 计算advantage
-    advantage = reshaped_rewards - baseline  # [num_prompts, num_generations, seq_len]
-    
-    print(f"📊 advantage统计: mean={advantage.mean():.4f}, std={advantage.std():.4f}")
-    
-    # 重塑回原始形状
-    advantage = advantage.view(batch_size, seq_len)
-    
-    print(f"✅ 最终advantage形状: {advantage.shape}")
-    print("=" * 60)
-    
-    return advantage
 
 
 def build_model(
@@ -1269,13 +917,6 @@ def train_with_grpo(
     checkpoint_dir: Optional[str] = None,
     current_step: int = 0,
     save_interval: int = 5,
-    use_shapley: bool = False,  # 新增：是否使用Shapley值加权
-    extract_atomic_questions_fn: Optional[Callable] = None,  # 新增：提取原子问题的函数
-    # Token级奖励分配参数
-    use_token_level: bool = False,  # 是否启用token级奖励分配
-    alpha_reward: float = 1.0,  # 过程奖励权重
-    beta_reward: float = 1.0,  # 结果奖励权重
-    gamma_reward: float = 3.0,  # 最终答案奖励权重
 ) -> None:
     """
     使用GRPO微调训练策略模型，支持DeepSpeed ZeRO-2和ZeRO-3分布式训练
@@ -1304,7 +945,7 @@ def train_with_grpo(
     
     logging.info(f"使用DeepSpeed ZeRO-{zero_stage}进行训练")
     
-    # 修复：构建参考模型（仅在训练开始时创建一次）
+    # ⚠️ 修复：构建参考模型（仅在训练开始时创建一次）
     if current_step == 0 or not hasattr(train_with_grpo, '_ref_model'):
         logging.info("创建参考模型（保持原始基础模型状态，不加载LoRA权重）...")
         ref_model = AutoModelForCausalLM.from_pretrained(
@@ -1341,10 +982,6 @@ def train_with_grpo(
         step = 0
         for batch in dataloader:
             logging.info(f"开始生成rollout数据, 步骤 {step+1}/{min(steps_per_iteration, len(dataloader))}")
-            # 确保模型处于评估模式进行生成
-            was_training = policy_model.training
-            policy_model.eval()
-            
             with torch.no_grad():
                 rollout = generate_rollout_data(
                     policy_model,
@@ -1358,24 +995,10 @@ def train_with_grpo(
                     do_sample,
                     max_generate_iterations,
                 )
-            
-            # 恢复之前的训练状态
-            if was_training:
-                policy_model.train()
             logging.info("成功生成rollout数据")
             
             # 执行mu次GRPO更新
             for _ in range(mu):
-                # 提取原子问题（如果启用Shapley）
-                atomic_questions = None
-                if use_shapley and extract_atomic_questions_fn is not None:
-                    try:
-                        atomic_questions = extract_atomic_questions_fn(batch, num_generations)
-                        logging.info(f"提取到 {len(atomic_questions)} 个原子问题用于Shapley计算")
-                    except Exception as e:
-                        logging.warning(f"提取原子问题失败: {e}, 将使用传统奖励模式")
-                        atomic_questions = None
-                
                 # 确保参数顺序与maximize_grpo_objective的定义匹配
                 loss_val, avg_r, rdict = maximize_grpo_objective(
                     model=policy_model, 
@@ -1386,13 +1009,7 @@ def train_with_grpo(
                     optimizer=optimizer, 
                     beta=beta, 
                     epsilon=epsilon, 
-                    accelerator=accelerator,
-                    use_shapley=use_shapley,
-                    atomic_questions=atomic_questions,
-                    use_token_level=use_token_level,
-                    alpha=alpha_reward,
-                    beta_reward=beta_reward,
-                    gamma=gamma_reward
+                    accelerator=accelerator
                 )
             logging.info("成功最大化GRPO目标函数")
 
@@ -1402,19 +1019,10 @@ def train_with_grpo(
             )
             if accelerator.is_local_main_process:
                 try:
-                    # 正确计算各类奖励分数的平均值
-                    def safe_avg(scores_list):
-                        """安全地计算分数列表的平均值"""
-                        if scores_list and len(scores_list) > 0:
-                            return sum(scores_list) / len(scores_list)
-                        return 0.0
-                    
-                    format_reward = safe_avg(rdict.get("format_scores", []))
-                    answer_reward = safe_avg(rdict.get("correctness_scores", []))
-                    fact_reward = safe_avg(rdict.get("fact_scores", []))
-                    
-                    print(f"📊 SwanLab记录 - Format: {format_reward:.3f}, Answer: {answer_reward:.3f}, Fact: {fact_reward:.3f}")
-                    print(f"📋 原始数据 - Format scores: {rdict.get('format_scores', [])}")
+                    # 从奖励字典中提取各类奖励分数
+                    format_reward = sum(rdict.get("format_scores", [0])) / len(rdict.get("format_scores", [1]))
+                    answer_reward = sum(rdict.get("correctness_scores", [0])) / len(rdict.get("correctness_scores", [1]))
+                    fact_reward = sum(rdict.get("fact_scores", [0])) / len(rdict.get("fact_scores", [1]))
                     
                     # 记录到SwanLab
                     swanlab.log(
@@ -1532,14 +1140,14 @@ def train_with_grpo(
                     # 始终保存tokenizer
                     tokenizer.save_pretrained(ckpt)
                     logging.info(f"tokenizer已保存到: {ckpt}")
-                            
+
             if step >= steps_per_iteration:
                 break
 
             # 等待所有进程
             accelerator.wait_for_everyone()
 
-        # 注意：不删除参考模型，在多个迭代中重用它
+        # 注意：不删除参考模型，因为我们在多个迭代中重用它
         # 只在最后一个迭代结束时清理内存
         if it == num_iterations:
             logging.info("训练完成，清理参考模型缓存")
@@ -1585,9 +1193,7 @@ if __name__ == '__main__':
     # train_dataloader=DataLoader(dataset, batch_size=2, shuffle=True,collate_fn=custom_collate_fn)
     # accelerator = Accelerator()
 
-    # 使用配置文件中的模型路径，而不是硬编码
-    model_name_or_path = ("/data/xiaobei/dhx/LLaMA-Factory-main-new/"
-                         "models/promed-qwen2.5-1.5b-sft-3epoch-merged")
+    model_name_or_path = "/root/小北健康-模型"
     tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(
         model_name_or_path,

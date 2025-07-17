@@ -22,7 +22,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from accelerate.utils import BnbQuantizationConfig, load_and_quantize_model
 from dataclasses import dataclass, field
 from typing import Optional
-# 初始化rich traceback
 load_dotenv()
 install()
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), './')))
@@ -44,21 +43,81 @@ class DeepSpeedArguments:
     local_rank: Optional[int] = field(default=-1, metadata={"help": "本地GPU编号"})
 
 
+@dataclass  
+class TrainingArguments:
+    """训练相关参数"""
+    use_shapley: Optional[bool] = field(default=False, metadata={"help": "是否启用Shapley值加权fact score奖励"})
+    shapley_max_samples: Optional[int] = field(default=50, metadata={"help": "Shapley值计算的最大采样次数"})
+    shapley_min_samples: Optional[int] = field(default=3, metadata={"help": "Shapley值计算的最小采样次数"})
+
+    # Token级奖励分配参数
+    use_token_level: Optional[bool] = field(default=False, metadata={"help": "是否启用token级奖励分配"})
+    alpha_reward: Optional[float] = field(default=1.0, metadata={"help": "过程奖励权重"})
+    beta_reward: Optional[float] = field(default=1.0, metadata={"help": "结果奖励权重"})
+    gamma_reward: Optional[float] = field(default=3.0, metadata={"help": "最终答案奖励权重"})
+
+
 def custom_collate_fn(batch):
     """
-    将批次中的字典进行整合
+    将批次中的字典进行整合，并提取原子问题
     """
     collated = {key: [sample[key] for sample in batch] for key in batch[0]}
     return collated
 
 
+def extract_atomic_questions_from_batch(batch_samples, num_generations=4):
+    """
+    从批处理数据中提取原子问题，并为每个生成的completion重复
+    """
+    # 从batch中提取原始的原子问题
+    base_atomic_questions = []
+    
+    for i in range(len(batch_samples['facts'])):
+        try:
+            # 如果数据中有atomic_question字段
+            if 'atomic_question' in batch_samples:
+                base_atomic_questions.append(batch_samples['atomic_question'][i])
+            else:
+                # 如果没有，可以使用一个通用的医疗问题
+                base_atomic_questions.append("根据患者的症状和检查结果，最可能的诊断是什么？")
+        except:
+            # 回退到默认问题
+            base_atomic_questions.append("根据患者的症状和检查结果，最可能的诊断是什么？")
+    
+    # 为每个generation重复原子问题，使其与completions数量匹配
+    repeated_atomic_questions = []
+    for atomic_question in base_atomic_questions:
+        for _ in range(num_generations):
+            repeated_atomic_questions.append(atomic_question)
+    
+    return repeated_atomic_questions
+
+
 def main():
-    # 解析DeepSpeed参数
-    parser = HfArgumentParser(DeepSpeedArguments)
-    ds_args, _ = parser.parse_args_into_dataclasses(return_remaining_strings=True)
+    # 解析命令行参数
+    parser = HfArgumentParser([DeepSpeedArguments, TrainingArguments])
+    ds_args, train_args, _ = parser.parse_args_into_dataclasses(return_remaining_strings=True)
     
     # 设置环境
     config = load_config("src/config/config.yaml")
+
+    # 打印Shapley配置信息
+    if train_args.use_shapley:
+        print(f"[green]✓ 启用Shapley值加权训练[/green]")
+        print(f"  - 最大采样次数: {train_args.shapley_max_samples}")
+        print(f"  - 最小采样次数: {train_args.shapley_min_samples}")
+    else:
+        print(f"[yellow]使用传统fact score奖励模式[/yellow]")
+    
+    # 打印Token级奖励配置信息
+    if train_args.use_token_level:
+        print(f"[bold green]🎯 启用Token级奖励分配[/bold green]")
+        print(f"  - 过程奖励权重(α): {train_args.alpha_reward}")
+        print(f"  - 结果奖励权重(β): {train_args.beta_reward}")
+        print(f"  - 最终答案奖励权重(γ): {train_args.gamma_reward}")
+        print(f"  - Shapley加权: {'启用' if train_args.use_shapley else '禁用'}")
+    else:
+        print(f"[yellow]使用传统全局奖励模式[/yellow]")
 
     if ds_args.deepspeed and ds_args.deepspeed_config:
         # 当使用DeepSpeed时，加载DeepSpeed配置
@@ -81,10 +140,18 @@ def main():
     accelerator = Accelerator()
     #初始化swanlab
     if accelerator.is_local_main_process and config.swanlab:
+        swanlab_config = config.__dict__.copy()
+        # 添加Shapley配置到SwanLab
+        swanlab_config.update({
+            "use_shapley": train_args.use_shapley,
+            "shapley_max_samples": train_args.shapley_max_samples,
+            "shapley_min_samples": train_args.shapley_min_samples
+        })
+        
         swanlab.init(
             project=config.project.name,
-            experiment_name=config.experiment.name,
-            config=config.__dict__,
+            experiment_name=config.experiment.name + ("_shapley" if train_args.use_shapley else "_traditional"),
+            config=swanlab_config,
             api_key="fT8QlkzJr5kY9syLiIdSr"
         )
         logging.info("SwanLab已初始化")
@@ -165,6 +232,14 @@ def main():
         "epsilon": config.training.optimizer.epsilon,
         "reward_function": overall_reward,
         "save_interval": config.training.save_interval,
+        # 添加Shapley相关配置
+        "use_shapley": train_args.use_shapley,
+        "extract_atomic_questions_fn": extract_atomic_questions_from_batch,
+        # 添加Token级奖励配置
+        "use_token_level": train_args.use_token_level,
+        "alpha_reward": train_args.alpha_reward,
+        "beta_reward": train_args.beta_reward,
+        "gamma_reward": train_args.gamma_reward,
     }
     if is_main_process:
         logging.info(f"训练配置: {training_config}")

@@ -8,11 +8,10 @@ conda activate AgenticRAG
 export CUDA_VISIBLE_DEVICES=0  
 
 # 基础模型路径
-BASE_MODEL="/home/xiaobei/小北健康-qwen2.5-7b"
+BASE_MODEL="/data/xiaobei/dhx/LLaMA-Factory-main-new/models/promed-qwen2.5-1.5b-sft-3epoch-merged"
 
 # LoRA权重路径
-LORA_WEIGHTS="/home/xiaobei/hbx/HBXAgentic-RAG-R1__under-construction/checkpoints/qwen2.5-32b-medqa-4GPU/2025-05-22/step-0005"
-
+LORA_WEIGHTS="/home/xiaobei/hbx/HHHAgentic-RAG-R1__under-construction/checkpoints/promed-qwen25-1.5b-correctness-reward612-softmax/2025-06-12/step-0200"
 # 数据集和评估配置
 DATASET_SPLIT="test"
 NUM_SAMPLES=1935  # 测试的数量

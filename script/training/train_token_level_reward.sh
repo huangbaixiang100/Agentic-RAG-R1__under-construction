@@ -1,4 +1,7 @@
 #!/bin/bash
+# Token级奖励分配训练脚本
+# 支持细粒度奖励分配，结合过程奖励和结果奖励
+
 # 使用绝对路径激活conda环境
 export PATH="/data/xiaobei/anaconda3/bin:$PATH"
 eval "$(/data/xiaobei/anaconda3/bin/conda shell.bash hook)"
@@ -47,13 +50,31 @@ if [ ! -f "$CONFIG_FILE" ]; then
 fi
 echo "使用DeepSpeed配置文件: $CONFIG_FILE"
 
-# 使用accelerate启动DeepSpeed ZeRO-2配置的训练
-echo "启动DeepSpeed ZeRO-2训练..."
-CUDA_VISIBLE_DEVICES=2,3,6,5,7 accelerate launch \
+# 启用Token级奖励分配训练！
+echo "=========================================="
+echo "🎯 启动Token级奖励分配医疗对话训练"
+echo "=========================================="
+echo "✓ 启用Token级奖励分配"
+echo "✓ 结合过程奖励和结果奖励"
+echo "✓ 支持Shapley值加权信息增益"
+echo "✓ 每个问题获得与其贡献相匹配的奖励"
+echo "=========================================="
+
+# 使用accelerate启动DeepSpeed ZeRO-2配置的Token级奖励训练
+CUDA_VISIBLE_DEVICES=2,3 accelerate launch \
     --config_file ./src/config/accelerate_config/train_zero2.yaml \
     --main_process_port 12348 \
-    --num_processes 5 \
-    --mixed_precision "fp16" \
-    ./hhhdoctor_train.py
+    --num_processes 2 \
+    --mixed_precision "bf16" \
+    ./hhhdoctor_train.py \
+    # --use_shapley=True \
+    # --shapley_max_samples 50 \
+    # --shapley_min_samples 3 \
+    --use_token_level=True \
+    --alpha_reward=2.0 \
+    --beta_reward=1.0 \
+    --gamma_reward=3.0
 
-echo "训练完成！"
+echo "🎉 Token级奖励分配训练完成！"
+echo "📊 奖励分配统计信息已保存到日志中"
+echo "🔍 可通过SwanLab查看详细训练指标" 

@@ -47,13 +47,25 @@ if [ ! -f "$CONFIG_FILE" ]; then
 fi
 echo "使用DeepSpeed配置文件: $CONFIG_FILE"
 
-# 使用accelerate启动DeepSpeed ZeRO-2配置的训练
-echo "启动DeepSpeed ZeRO-2训练..."
-CUDA_VISIBLE_DEVICES=2,3,6,5,7 accelerate launch \
+# 启用Shapley值加权训练！
+echo "======================================"
+echo "🚀 启动基于Shapley值加权的医疗对话训练"
+echo "======================================"
+echo "✓ 启用Shapley值加权fact score奖励"
+echo "✓ 最大采样次数：50"
+echo "✓ 最小采样次数：3" 
+echo "✓ 动态计算患者信息重要性权重"
+echo "======================================"
+
+# 使用accelerate启动DeepSpeed ZeRO-2配置的Shapley训练
+CUDA_VISIBLE_DEVICES=2,3,4,5 accelerate launch \
     --config_file ./src/config/accelerate_config/train_zero2.yaml \
     --main_process_port 12348 \
-    --num_processes 5 \
-    --mixed_precision "fp16" \
-    ./hhhdoctor_train.py
+    --num_processes 1 \
+    --mixed_precision "bf16" \
+    ./hhhdoctor_train.py \
+    --use_shapley=True \
+    --shapley_max_samples 50 \
+    --shapley_min_samples 3
 
-echo "训练完成！"
+echo "🎉 Shapley加权训练完成！" 
