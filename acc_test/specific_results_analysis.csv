@@ -1,0 +1,7 @@
+file_name,dataset,model,accuracy,bootstrap_mean,variance,confidence_lower,confidence_upper,sample_count
+QwenVLLM_local_cmb_results.jsonl,CMB,Qwen3_8b2,0.0000,0.0000,0.000000,0.0000,0.0000,0
+QwenVLLM_local_medqa_results.jsonl,MedQA,Qwen3_8b2,0.0000,0.0000,0.000000,0.0000,0.0000,0
+QwenVLLM_local_cmb_results.jsonl,CMB,Qwen3_8b,0.0000,0.0000,0.000000,0.0000,0.0000,0
+QwenVLLM_local_medqa_results.jsonl,MedQA,Qwen3_8b,0.0000,0.0000,0.000000,0.0000,0.0000,0
+qwen3-1.7b_cmb_results.jsonl,CMB,Qwen3_1.7b,0.0000,0.0000,0.000000,0.0000,0.0000,0
+qwen3-1.7b_medqa_results.jsonl,MedQA,Qwen3_1.7b,0.0000,0.0000,0.000000,0.0000,0.0000,0

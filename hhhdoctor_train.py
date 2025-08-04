@@ -52,45 +52,32 @@ class TrainingArguments:
 
     # Token级奖励分配参数
     use_token_level: Optional[bool] = field(default=False, metadata={"help": "是否启用token级奖励分配"})
-    alpha_reward: Optional[float] = field(default=1.0, metadata={"help": "过程奖励权重"})
-    beta_reward: Optional[float] = field(default=1.0, metadata={"help": "结果奖励权重"})
-    gamma_reward: Optional[float] = field(default=3.0, metadata={"help": "最终答案奖励权重"})
+    alpha_reward: Optional[float] = field(default=1.0, metadata={"help": "Question Shapley奖励权重"})
+    beta_reward: Optional[float] = field(default=1.0, metadata={"help": "Question结果奖励权重"})
+    gamma_reward: Optional[float] = field(default=3.0, metadata={"help": "Answer正确性奖励权重"})
+    format_reward_weight: Optional[float] = field(default=1.0, metadata={"help": "格式奖励权重"})
 
 
 def custom_collate_fn(batch):
     """
     将批次中的字典进行整合，并提取原子问题
+    同时处理不同数据集之间的字段兼容性问题
     """
     collated = {key: [sample[key] for sample in batch] for key in batch[0]}
+    
+    # 🔧 处理选项字段兼容性：统一使用'options'字段名
+    if 'option' in collated and 'options' not in collated:
+        # CMB数据集使用'option'，需要重命名为'options'以保持一致
+        collated['options'] = collated.pop('option')
+        print(f"[兼容性处理] 将'option'字段重命名为'options'")
+    elif 'options' in collated:
+        print(f"[兼容性检查] 已存在'options'字段")
+    else:
+        print(f"[警告] 未找到选项字段！batch keys: {list(collated.keys())}")
+    
     return collated
 
 
-def extract_atomic_questions_from_batch(batch_samples, num_generations=4):
-    """
-    从批处理数据中提取原子问题，并为每个生成的completion重复
-    """
-    # 从batch中提取原始的原子问题
-    base_atomic_questions = []
-    
-    for i in range(len(batch_samples['facts'])):
-        try:
-            # 如果数据中有atomic_question字段
-            if 'atomic_question' in batch_samples:
-                base_atomic_questions.append(batch_samples['atomic_question'][i])
-            else:
-                # 如果没有，可以使用一个通用的医疗问题
-                base_atomic_questions.append("根据患者的症状和检查结果，最可能的诊断是什么？")
-        except:
-            # 回退到默认问题
-            base_atomic_questions.append("根据患者的症状和检查结果，最可能的诊断是什么？")
-    
-    # 为每个generation重复原子问题，使其与completions数量匹配
-    repeated_atomic_questions = []
-    for atomic_question in base_atomic_questions:
-        for _ in range(num_generations):
-            repeated_atomic_questions.append(atomic_question)
-    
-    return repeated_atomic_questions
 
 
 def main():
@@ -111,10 +98,11 @@ def main():
     
     # 打印Token级奖励配置信息
     if train_args.use_token_level:
-        print(f"[bold green]🎯 启用Token级奖励分配[/bold green]")
-        print(f"  - 过程奖励权重(α): {train_args.alpha_reward}")
-        print(f"  - 结果奖励权重(β): {train_args.beta_reward}")
-        print(f"  - 最终答案奖励权重(γ): {train_args.gamma_reward}")
+        print(f"[bold green]🎯 启用纯Token级奖励分配[/bold green]")
+        print(f"  - Question Shapley权重(α): {train_args.alpha_reward}")
+        print(f"  - Question结果权重(β): {train_args.beta_reward}")
+        print(f"  - Answer正确性权重(γ): {train_args.gamma_reward}")
+        print(f"  - 格式奖励权重: {train_args.format_reward_weight}")
         print(f"  - Shapley加权: {'启用' if train_args.use_shapley else '禁用'}")
     else:
         print(f"[yellow]使用传统全局奖励模式[/yellow]")
@@ -179,7 +167,14 @@ def main():
         logging.info(f"使用设备: {device}")
 
     # 准备数据集
-    train_dataset, eval_dataset = prepare_dataset("train", config.dataset.name, eval_size=config.dataset.num_eval)
+    if config.dataset.name == "medqa":
+        # 使用本地MedQA数据文件
+        train_dataset, eval_dataset = prepare_dataset(
+            "train", config.dataset.name, eval_size=config.dataset.num_eval,
+            train_file='/home/xiaobei/Agentic-RAG-R1__under-construction/src/data/dataset/medqa_train_atomic_data.jsonl'
+        )
+    else:
+        train_dataset, eval_dataset = prepare_dataset("train", config.dataset.name, eval_size=config.dataset.num_eval)
     train_dataloader = DataLoader(
         train_dataset, 
         batch_size=config.training.batch_size, 
@@ -216,6 +211,9 @@ def main():
     base_model = optimize_model_memory(base_model)
     reference_base_model = optimize_model_memory(reference_base_model)
 
+    # 导入原子问题提取函数 - 必须在training_config之前导入
+    from src.models.doctor_trainer import extract_atomic_questions_from_batch
+
     # 训练配置
     training_config = {
         "num_iterations": config.training.num_iterations,
@@ -240,6 +238,7 @@ def main():
         "alpha_reward": train_args.alpha_reward,
         "beta_reward": train_args.beta_reward,
         "gamma_reward": train_args.gamma_reward,
+        "format_reward_weight": train_args.format_reward_weight,
     }
     if is_main_process:
         logging.info(f"训练配置: {training_config}")
@@ -255,7 +254,7 @@ def main():
         zero_stage = ds_config["zero_optimization"].get("stage", 0)
         if is_main_process:
             logging.info(f"检测到DeepSpeed ZeRO-{zero_stage}配置")
-
+    
     # 使用GRPO训练
     train_with_grpo(
         config=config,

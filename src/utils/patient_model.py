@@ -4,11 +4,11 @@ from openai import OpenAI
 from src.data.doctor_patient_prompts import patient_system_prompt
 from src.utils.utils import call_gpt
 
+# 恢复为原来的API配置
+patient_client = OpenAI(api_key="8cefb70606f3472d8731bd65661ce409", base_url="http://8289.model.mingxingtech.com:10032/v1")
 
-patient_client = OpenAI(api_key="8cefb70606f3472d8731bd65661ce409",base_url="http://8289.model.mingxingtech.com:10032/v1")
 
-
-def patient_answer(doctor_question,atomic_facts):
+def patient_answer(doctor_question, atomic_facts):
     patient_prompt = patient_system_prompt.format(atomic_facts='\n'.join(atomic_facts))
     patient_messages = [{'role': 'system', 'content': patient_prompt}]
     patient_messages.append({'role': 'user', 'content': doctor_question})

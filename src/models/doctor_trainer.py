@@ -92,11 +92,29 @@ def extract_atomic_questions_from_batch(
         重复扩展后的原子问题列表
     """
     try:
+        # 🔍 调试：打印batch_samples的所有字段
+        print(f"🔍 ===== extract_atomic_questions_from_batch调试信息 =====")
+        print(f"📊 batch_samples中的所有字段: {list(batch_samples.keys())}")
+        
+        for key, value in batch_samples.items():
+            if isinstance(value, list):
+                print(f"  {key}: 类型=列表, 长度={len(value)}")
+                if value and len(value) > 0:
+                    print(f"    首个元素类型: {type(value[0])}")
+                    if isinstance(value[0], str):
+                        print(f"    首个元素内容: '{value[0][:100]}...'")
+                    else:
+                        print(f"    首个元素内容: {str(value[0])[:100]}...")
+            else:
+                print(f"  {key}: 类型={type(value)}, 内容={str(value)[:50]}...")
+        
         # 尝试从batch中获取question字段
         if 'question' in batch_samples:
             questions = batch_samples['question']
+            print(f"✅ 找到question字段，内容: {questions}")
         elif 'atomic_question' in batch_samples:
             questions = batch_samples['atomic_question']
+            print(f"✅ 找到atomic_question字段，内容: {questions}")
         else:
             # 如果没有明确的question字段，尝试从prompt中解析
             logging.warning(
@@ -746,7 +764,9 @@ def generate_rollout_data(
     logging.info("="*80)
     
     repeated_facts = [f for f in batch_facts for _ in range(num_generations)]
-    repeated_options = [o for o in batch_samples['option'] for _ in range(num_generations)]
+    # 兼容两种数据集的字段名：统一使用options
+    options_key = 'options' if 'options' in batch_samples else 'option'
+    repeated_options = [o for o in batch_samples[options_key] for _ in range(num_generations)]
     repeated_prompts = [p for p in prompts for _ in range(num_generations)]
     repeated_answers = [a for a in answers for _ in range(num_generations)]
 
@@ -862,9 +882,11 @@ def maximize_grpo_objective(
     use_shapley: bool = False,  # 新增参数：是否使用Shapley值加权
     atomic_questions: List[str] = None,  # 新增参数：原子问题列表
     use_token_level: bool = False,  # 新增参数：是否使用token级奖励分配
-    alpha: float = 2.0,  # 过程奖励权重
-    beta_reward: float = 1.0,  # 结果奖励权重
-    gamma: float = 3.0,  # 最终答案奖励
+    token_reward_mode: str = "token_baseline",  # 新增参数：token奖励模式
+    alpha: float = 2.0,  # Question Shapley奖励权重
+    beta_reward: float = 1.0,  # Question结果奖励权重
+    gamma: float = 3.0,  # Answer正确性奖励权重
+    format_reward_weight: float = 1.0,  # 格式奖励权重
 ) -> Tuple[float, float, Dict[str, Any]]:
     """
     Perform a single GRPO update step, computing loss and backpropagating.
@@ -883,6 +905,9 @@ def maximize_grpo_objective(
         use_shapley (bool): Whether to use Shapley value weighting for fact scores.
         atomic_questions (List[str]): List of atomic questions for Shapley calculation.
         use_token_level (bool): Whether to use token-level reward allocation.
+        token_reward_mode (str): Token reward calculation mode:
+                                - "token_baseline": 在每个token位置计算baseline（原方式）
+                                - "rollout_baseline": 每个rollout计算总分，然后组内比较
         alpha (float): Process reward weight.
         beta_reward (float): Result reward weight. 
         gamma (float): Final answer reward weight.
@@ -915,6 +940,7 @@ def maximize_grpo_objective(
         print(f"📏 logits_to_keep: {k}")
         print(f"📏 completion_length: {completion_length}")
         print(f"📋 batch数量: {len(rollout_data['formatted_completions'])}")
+        print(f"🎯 Token奖励模式: {token_reward_mode}")
         
         # 检查每个completion的原始文本长度
         for i, completion_list in enumerate(rollout_data['formatted_completions']):
@@ -923,6 +949,7 @@ def maximize_grpo_objective(
                 tokens = tokenizer.encode(content, add_special_tokens=False)
                 print(f"📄 Sample {i}-{j}: 原始文本长度={len(tokens)}, 内容前50字符='{content[:50]}...'")
         
+        # 🎯 纯Token级奖励计算（整合格式奖励）
         rewards_dict = overall_reward_with_token_allocation(
             model=model,
             tokenizer=tokenizer,
@@ -936,78 +963,96 @@ def maximize_grpo_objective(
             alpha=alpha,
             beta=beta_reward,
             gamma=gamma,
-            max_completion_length=completion_length  # 🔧 传递截断长度
+            format_reward_weight=format_reward_weight,  # 🎯 格式奖励权重
+            max_completion_length=completion_length
         )
         
         # 处理token级奖励
         if "token_rewards" in rewards_dict:
-            print("🎯 使用token级奖励分配模式")
+            print("🎯 使用纯token级奖励分配模式")
             token_rewards_list = rewards_dict["token_rewards"]
+            
+            # 🎯 记录各类token奖励的统计信息到SwanLab
+            if "question_token_rewards" in rewards_dict:
+                question_token_mean = sum(rewards_dict["question_token_rewards"]) / len(rewards_dict["question_token_rewards"]) if rewards_dict["question_token_rewards"] else 0.0
+                print(f"📊 Question tokens平均奖励: {question_token_mean:.4f}")
+                # SwanLab记录 - 将在train_with_grpo中统一记录
+            
+            if "answer_token_rewards" in rewards_dict:
+                answer_token_mean = sum(rewards_dict["answer_token_rewards"]) / len(rewards_dict["answer_token_rewards"]) if rewards_dict["answer_token_rewards"] else 0.0
+                print(f"📊 Answer tokens平均奖励: {answer_token_mean:.4f}")
+            
+            if "format_token_rewards" in rewards_dict:
+                format_token_mean = sum(rewards_dict["format_token_rewards"]) / len(rewards_dict["format_token_rewards"]) if rewards_dict["format_token_rewards"] else 0.0
+                print(f"📊 Format tokens平均奖励: {format_token_mean:.4f}")
+            
+            if "token_rewards_mean" in rewards_dict:
+                total_token_mean = sum(rewards_dict["token_rewards_mean"]) / len(rewards_dict["token_rewards_mean"]) if rewards_dict["token_rewards_mean"] else 0.0
+                print(f"📊 Total tokens平均奖励: {total_token_mean:.4f}")
             
             print(f"📊 token_rewards_list长度: {len(token_rewards_list)}")
             for i, token_rewards in enumerate(token_rewards_list):
                 print(f"📊 Sample {i}: token_rewards长度={len(token_rewards)}")
             
-            # 将token级奖励转换为tensor并对齐到正确的长度
-            batch_size = input_ids.size(0)
-            max_length = input_ids.size(1)
+            # 🎯 Token级Group Baseline模式：每个token的advantage = token_reward - group_baseline
+            print("🎯 Token级Group Baseline模式：token_advantage = token_reward - group_baseline")
             
-            print(f"📏 创建token_rewards_tensor: batch_size={batch_size}, max_length={max_length}")
+            # 使用新的group baseline advantage计算
+            adv = compute_token_level_group_advantages(
+                token_rewards_list, rollout_data["num_generations"], comp_mask
+            )
             
-            # 创建token级奖励tensor
-            token_rewards_tensor = torch.zeros_like(input_ids, dtype=torch.float32, device=curr_lp.device)
-            
-            for i, token_rewards in enumerate(token_rewards_list):
-                if i < batch_size:
-                    # 对齐奖励长度到输入序列长度
-                    reward_length = min(len(token_rewards), max_length)
-                    print(f"📏 Sample {i}: 奖励对齐 {len(token_rewards)} -> {reward_length}")
-                    token_rewards_tensor[i, :reward_length] = torch.tensor(
-                        token_rewards[:reward_length], dtype=torch.float32, device=curr_lp.device
-                    )
-            
-            # 使用token级奖励计算advantage
-            print(f"📊 Token奖励统计 - 均值: {token_rewards_tensor.mean():.4f}, 标准差: {token_rewards_tensor.std():.4f}")
-            print(f"📏 准备计算advantage: token_rewards_tensor形状={token_rewards_tensor.shape}, completion_mask形状={comp_mask.shape}")
-            
-            # 计算token级advantage
-            # 这里我们需要重新设计advantage计算，因为现在每个token有不同的奖励
-            adv = compute_token_level_advantages(token_rewards_tensor, rollout_data["num_generations"], comp_mask)
-            
+            print(f"📊 Token级Group Baseline Advantage统计:")
+            print(f"  均值: {adv.mean():.4f}, 标准差: {adv.std():.4f}")
+            print(f"  形状: {adv.shape}, 非零元素数: {(adv != 0).sum().item()}")
+            print(f"  正advantage数: {(adv > 0).sum().item()}")
+            print(f"  负advantage数: {(adv < 0).sum().item()}")
+                
+            # Token级模式下的avg_reward使用所有token奖励的平均值
+            avg_reward = float(adv.mean().item())
+                
         else:
             print("⚠️ Token级奖励计算失败，回退到全局奖励")
             # 回退到全局奖励
             rewards = torch.tensor(rewards_dict["total_scores"], dtype=torch.float32, device=curr_lp.device)
+            avg_reward = float(rewards.mean())
             adv = compute_group_relative_advantages(rewards, rollout_data["num_generations"])
             
     else:
-        # 传统全局奖励模式
-        if use_shapley and atomic_questions:
-            rewards_dict = reward_function(
+        # 传统rollout级别奖励计算
+        print("🎯 使用传统rollout级别奖励计算")
+        
+        # 根据配置调用不同的奖励函数
+        if use_shapley:
+            # 使用Shapley值加权的overall_reward
+            from src.models.doctor_reward import overall_reward_with_token_allocation
+            rewards_dict = overall_reward_with_token_allocation(
                 model=model,
                 tokenizer=tokenizer,
                 facts=rollout_data["repeated_facts"],
-            completions=rollout_data["formatted_completions"],
-            options=rollout_data["repeated_options"],
-            answers=rollout_data["repeated_answers"],
-            use_shapley=True,
-            atomic_questions=atomic_questions
+                completions=rollout_data["formatted_completions"],
+                options=rollout_data["repeated_options"],
+                answers=rollout_data["repeated_answers"],
+                use_shapley=True,
+                atomic_questions=atomic_questions,
+                use_token_level=False,  # 明确设置为False
             )
         else:
+            # 使用传统的overall_reward
             rewards_dict = reward_function(
                 model=model,
                 tokenizer=tokenizer,
                 facts=rollout_data["repeated_facts"],
-            completions=rollout_data["formatted_completions"],
-            options=rollout_data["repeated_options"],
-            answers=rollout_data["repeated_answers"],
-            use_shapley=False
-        )
-    
-    rewards = torch.tensor(rewards_dict["total_scores"], dtype=torch.float32, device=curr_lp.device)
-    adv = compute_group_relative_advantages(rewards, rollout_data["num_generations"])
-    
-    avg_reward = float(rewards_dict.get("total_scores", [0])[0] if "total_scores" in rewards_dict else 0)
+                completions=rollout_data["formatted_completions"],
+                options=rollout_data["repeated_options"],
+                answers=rollout_data["repeated_answers"],
+                use_shapley=False,
+            )
+        
+        # 传统的rollout级别advantage计算
+        rewards = torch.tensor(rewards_dict["total_scores"], dtype=torch.float32, device=curr_lp.device)
+        avg_reward = float(rewards.mean())
+        adv = compute_group_relative_advantages(rewards, rollout_data["num_generations"])
     
     # GRPO loss计算
     surr1 = ratio * adv
@@ -1126,6 +1171,262 @@ def compute_token_level_advantages(
     return advantage
 
 
+def compute_rollout_total_advantages(
+    token_rewards_list: List[List[float]], 
+    num_generations: int,
+    completion_mask: torch.Tensor
+) -> torch.Tensor:
+    """
+    Token级Rollout Baseline计算方式：
+    1. 每个token保持自己的具体奖励值（0-3分）
+    2. Group baseline = 该组所有token reward的平均值
+    3. 每个token的advantage = 自己的奖励 - group baseline
+    
+    Args:
+        token_rewards_list: List[List[float]] - 每个rollout的token级奖励
+        num_generations: 每个prompt的生成数量
+        completion_mask: [batch_size, seq_len] completion掩码
+        
+    Returns:
+        torch.Tensor: [batch_size, seq_len] 形状的advantage
+    """
+    print("🔍 ===== Token级Rollout Baseline Advantage计算 =====")
+    print(f"📏 输入token_rewards_list长度: {len(token_rewards_list)}")
+    print(f"📏 输入completion_mask形状: {completion_mask.shape}")
+    print(f"📏 num_generations: {num_generations}")
+    
+    batch_size, seq_len = completion_mask.shape
+    num_prompts = batch_size // num_generations
+    
+    print(f"📊 计算参数: batch_size={batch_size}, seq_len={seq_len}")
+    print(f"📊 计算参数: num_prompts={num_prompts}, num_generations={num_generations}")
+    
+    # 验证输入数据一致性
+    if len(token_rewards_list) != batch_size:
+        print(f"⚠️ token_rewards_list长度({len(token_rewards_list)})与batch_size({batch_size})不匹配")
+        while len(token_rewards_list) < batch_size:
+            token_rewards_list.append([])
+    
+    # 第一步：将token rewards转换为tensor
+    token_rewards_tensor = torch.zeros(batch_size, seq_len, device=completion_mask.device)
+    
+    for i, token_rewards in enumerate(token_rewards_list):
+        if i < batch_size and len(token_rewards) > 0:
+            # 将token rewards填入tensor，但不超过seq_len
+            for j, reward in enumerate(token_rewards):
+                if j < seq_len:
+                    token_rewards_tensor[i, j] = reward
+    
+    print(f"📊 Token rewards tensor形状: {token_rewards_tensor.shape}")
+    
+    # 第二步：按组计算baseline
+    # 重塑为[num_prompts, num_generations, seq_len]
+    grouped_token_rewards = token_rewards_tensor.view(num_prompts, num_generations, seq_len)
+    grouped_completion_mask = completion_mask.view(num_prompts, num_generations, seq_len)
+    
+    print(f"📊 分组后token rewards形状: {grouped_token_rewards.shape}")
+    print(f"📊 分组后completion mask形状: {grouped_completion_mask.shape}")
+    
+    # 计算每组的token reward baseline
+    group_baselines = torch.zeros(num_prompts, device=completion_mask.device)
+    
+    for group_idx in range(num_prompts):
+        # 获取该组所有rollout的有效token rewards
+        group_rewards = grouped_token_rewards[group_idx]  # [num_generations, seq_len]
+        group_mask = grouped_completion_mask[group_idx]   # [num_generations, seq_len]
+        
+        # 收集该组所有有效token的奖励值
+        valid_rewards = []
+        for gen_idx in range(num_generations):
+            for token_idx in range(seq_len):
+                if group_mask[gen_idx, token_idx] == 1:  # 有效token
+                    reward = group_rewards[gen_idx, token_idx].item()
+                    valid_rewards.append(reward)
+        
+        # 计算该组所有token的平均奖励作为baseline
+        if len(valid_rewards) > 0:
+            group_baseline = sum(valid_rewards) / len(valid_rewards)
+        else:
+            group_baseline = 0.0
+            
+        group_baselines[group_idx] = group_baseline
+        
+        print(f"📊 Group {group_idx}: {len(valid_rewards)}个有效token, baseline={group_baseline:.4f}")
+        print(f"    有效奖励分布: min={min(valid_rewards) if valid_rewards else 0:.2f}, "
+              f"max={max(valid_rewards) if valid_rewards else 0:.2f}, "
+              f"mean={group_baseline:.2f}")
+    
+    print(f"🎯 各组baseline: {group_baselines}")
+    
+    # 第三步：计算每个token的advantage = token_reward - group_baseline
+    token_advantages = torch.zeros(batch_size, seq_len, device=completion_mask.device)
+    
+    for group_idx in range(num_prompts):
+        group_baseline = group_baselines[group_idx]
+        
+        for gen_idx in range(num_generations):
+            # 计算在flattened batch中的索引
+            batch_idx = group_idx * num_generations + gen_idx
+            
+            for token_idx in range(seq_len):
+                if completion_mask[batch_idx, token_idx] == 1:  # 有效token
+                    token_reward = token_rewards_tensor[batch_idx, token_idx]
+                    token_advantage = token_reward - group_baseline
+                    token_advantages[batch_idx, token_idx] = token_advantage
+                    
+        print(f"📊 Group {group_idx} token advantages计算完成")
+    
+    # 调试信息：显示一些具体的advantage值
+    print("📊 Token Advantage详细分析:")
+    for i in range(min(4, batch_size)):  # 显示前4个rollout的信息
+        valid_mask = completion_mask[i] == 1
+        if valid_mask.any():
+            valid_rewards = token_rewards_tensor[i][valid_mask]
+            valid_advantages = token_advantages[i][valid_mask]
+            group_idx = i // num_generations
+            
+            print(f"  Rollout {i} (Group {group_idx}):")
+            print(f"    Token rewards: {valid_rewards[:5].tolist()}...")  # 显示前5个
+            print(f"    Token advantages: {valid_advantages[:5].tolist()}...")
+            print(f"    Group baseline: {group_baselines[group_idx]:.4f}")
+    
+    print(f"✅ 最终token_advantages形状: {token_advantages.shape}")
+    print(f"📊 Advantage统计: mean={token_advantages.mean():.4f}, std={token_advantages.std():.4f}")
+    print(f"📊 非零advantage数量: {(token_advantages != 0).sum().item()}")
+    print("=" * 60)
+    
+    return token_advantages
+
+
+def compute_token_level_group_advantages(
+    token_rewards_list: List[List[float]], 
+    num_generations: int,
+    completion_mask: torch.Tensor
+) -> torch.Tensor:
+    """
+    计算Token级Group Baseline的Advantage
+    
+    逻辑：
+    1. 每个token有自己的奖励 (token_reward)
+    2. Group baseline = 该组内所有有效token的平均奖励
+    3. 每个token的advantage = token_reward - group_baseline
+    
+    Args:
+        token_rewards_list: List[List[float]] - 每个rollout的token级奖励
+        num_generations: 每个prompt的生成数量
+        completion_mask: [batch_size, seq_len] completion掩码
+        
+    Returns:
+        torch.Tensor: [batch_size, seq_len] 形状的advantage
+    """
+    print("🔍 ===== Token级Group Baseline Advantage计算 =====")
+    print(f"📏 输入token_rewards_list长度: {len(token_rewards_list)}")
+    print(f"📏 输入completion_mask形状: {completion_mask.shape}")
+    print(f"📏 num_generations: {num_generations}")
+    
+    batch_size, seq_len = completion_mask.shape
+    num_prompts = batch_size // num_generations
+    
+    print(f"📊 计算参数: batch_size={batch_size}, seq_len={seq_len}")
+    print(f"📊 计算参数: num_prompts={num_prompts}, num_generations={num_generations}")
+    
+    # 验证输入数据一致性
+    if len(token_rewards_list) != batch_size:
+        print(f"⚠️ token_rewards_list长度({len(token_rewards_list)})与batch_size({batch_size})不匹配")
+        while len(token_rewards_list) < batch_size:
+            token_rewards_list.append([])
+    
+    # 第一步：将token rewards转换为tensor
+    token_rewards_tensor = torch.zeros(batch_size, seq_len, device=completion_mask.device)
+    
+    for i, token_rewards in enumerate(token_rewards_list):
+        if i < batch_size and len(token_rewards) > 0:
+            # 将token rewards填入tensor，但不超过seq_len
+            for j, reward in enumerate(token_rewards):
+                if j < seq_len:
+                    token_rewards_tensor[i, j] = reward
+    
+    print(f"📊 Token rewards tensor形状: {token_rewards_tensor.shape}")
+    
+    # 第二步：按组计算group baseline
+    group_baselines = torch.zeros(num_prompts, device=completion_mask.device)
+    
+    for group_idx in range(num_prompts):
+        # 获取该组的rollout索引范围
+        start_idx = group_idx * num_generations
+        end_idx = (group_idx + 1) * num_generations
+        
+        # 收集该组所有有效token的奖励值
+        group_token_rewards = []
+        
+        for rollout_idx in range(start_idx, min(end_idx, batch_size)):
+            # 获取该rollout的有效token奖励
+            mask = completion_mask[rollout_idx]  # [seq_len]
+            rewards = token_rewards_tensor[rollout_idx]  # [seq_len]
+            
+            # 只收集有效token的奖励
+            valid_positions = (mask == 1).nonzero().squeeze(-1)
+            for pos in valid_positions:
+                 pos_idx = pos.item()
+                 if pos_idx < rewards.size(0):
+                     group_token_rewards.append(rewards[pos_idx].item())
+        
+        # 计算该组所有token的平均奖励作为baseline
+        if len(group_token_rewards) > 0:
+            group_baseline = sum(group_token_rewards) / len(group_token_rewards)
+        else:
+            group_baseline = 0.0
+            
+        group_baselines[group_idx] = group_baseline
+        
+        print(f"📊 Group {group_idx}: {len(group_token_rewards)}个有效token")
+        print(f"    Token奖励分布: min={min(group_token_rewards) if group_token_rewards else 0:.3f}, "
+              f"max={max(group_token_rewards) if group_token_rewards else 0:.3f}, "
+              f"baseline={group_baseline:.3f}")
+    
+    print(f"🎯 各组baseline: {group_baselines}")
+    
+    # 第三步：计算每个token的advantage = token_reward - group_baseline
+    token_advantages = torch.zeros(batch_size, seq_len, device=completion_mask.device)
+    
+    for group_idx in range(num_prompts):
+        group_baseline = group_baselines[group_idx]
+        start_idx = group_idx * num_generations
+        end_idx = (group_idx + 1) * num_generations
+        
+        for rollout_idx in range(start_idx, min(end_idx, batch_size)):
+            for token_idx in range(seq_len):
+                if completion_mask[rollout_idx, token_idx] == 1:  # 有效token
+                    token_reward = token_rewards_tensor[rollout_idx, token_idx]
+                    token_advantage = token_reward - group_baseline
+                    token_advantages[rollout_idx, token_idx] = token_advantage
+                    
+        print(f"📊 Group {group_idx} (baseline={group_baseline:.3f}) token advantages计算完成")
+    
+    # 调试信息：显示一些具体的advantage值
+    print("📊 Token Advantage详细分析:")
+    for i in range(min(3, batch_size)):  # 显示前3个rollout的信息
+        valid_mask = completion_mask[i] == 1
+        if valid_mask.any():
+            valid_rewards = token_rewards_tensor[i][valid_mask]
+            valid_advantages = token_advantages[i][valid_mask]
+            group_idx = i // num_generations
+            
+            print(f"  Rollout {i} (Group {group_idx}):")
+            print(f"    前5个Token rewards: {valid_rewards[:5].tolist()}")
+            print(f"    前5个Token advantages: {valid_advantages[:5].tolist()}")
+            print(f"    Group baseline: {group_baselines[group_idx]:.3f}")
+    
+    print(f"✅ 最终token_advantages形状: {token_advantages.shape}")
+    print(f"📊 Advantage统计: mean={token_advantages.mean():.4f}, std={token_advantages.std():.4f}")
+    print(f"📊 正advantage token数: {(token_advantages > 0).sum().item()}")
+    print(f"📊 负advantage token数: {(token_advantages < 0).sum().item()}")
+    print(f"📊 零advantage token数: {(token_advantages == 0).sum().item()}")
+    print("=" * 60)
+    
+    return token_advantages
+
+
 def build_model(
     config,
     device: torch.device,
@@ -1172,7 +1473,7 @@ def build_model(
             logging.warning("continue_training设置为True，但我们现在使用合并后的模型，忽略此设置")
             
             # 直接加载合并后的模型
-            merged_model_path = "/data/xiaobei/hbx/merged_qwen25_model"
+            merged_model_path = "/ssd/hbx_llm/stepAblation-rolloutreward-0090"
             logging.info(f"加载合并后的模型: {merged_model_path}")
             model = AutoModelForCausalLM.from_pretrained(
                 merged_model_path,
@@ -1273,12 +1574,19 @@ def train_with_grpo(
     extract_atomic_questions_fn: Optional[Callable] = None,  # 新增：提取原子问题的函数
     # Token级奖励分配参数
     use_token_level: bool = False,  # 是否启用token级奖励分配
-    alpha_reward: float = 1.0,  # 过程奖励权重
-    beta_reward: float = 1.0,  # 结果奖励权重
-    gamma_reward: float = 3.0,  # 最终答案奖励权重
+    token_reward_mode: str = "token_baseline",  # 新增：token奖励计算模式
+    alpha_reward: float = 1.0,  # Question Shapley奖励权重
+    beta_reward: float = 1.0,  # Question结果奖励权重
+    gamma_reward: float = 3.0,  # Answer正确性奖励权重
+    format_reward_weight: float = 1.0,  # 格式奖励权重
 ) -> None:
     """
     使用GRPO微调训练策略模型，支持DeepSpeed ZeRO-2和ZeRO-3分布式训练
+    
+    新增参数:
+        token_reward_mode (str): Token奖励计算模式，可选：
+                                - "token_baseline": 在每个token位置计算baseline（原方式）
+                                - "rollout_baseline": 每个rollout计算总分，然后组内比较
     """    
     optimizer = torch.optim.Adam(policy_model.parameters(), lr=learning_rate)
     policy_model.train()
@@ -1303,6 +1611,7 @@ def train_with_grpo(
         zero_stage = 3  # 默认值
     
     logging.info(f"使用DeepSpeed ZeRO-{zero_stage}进行训练")
+    logging.info(f"Token奖励模式: {token_reward_mode}")
     
     # 修复：构建参考模型（仅在训练开始时创建一次）
     if current_step == 0 or not hasattr(train_with_grpo, '_ref_model'):
@@ -1370,11 +1679,20 @@ def train_with_grpo(
                 atomic_questions = None
                 if use_shapley and extract_atomic_questions_fn is not None:
                     try:
+                        print(f"🎯 开始提取原子问题，batch字段: {list(batch.keys())}")
                         atomic_questions = extract_atomic_questions_fn(batch, num_generations)
                         logging.info(f"提取到 {len(atomic_questions)} 个原子问题用于Shapley计算")
+                        print(f"📋 提取的原子问题: {atomic_questions[:3]}...")  # 显示前3个
                     except Exception as e:
                         logging.warning(f"提取原子问题失败: {e}, 将使用传统奖励模式")
+                        import traceback
+                        print(f"📋 详细错误信息: {traceback.format_exc()}")
                         atomic_questions = None
+                else:
+                    if not use_shapley:
+                        print(f"⚠️ use_shapley=False，跳过原子问题提取")
+                    elif extract_atomic_questions_fn is None:
+                        print(f"⚠️ extract_atomic_questions_fn为None，跳过原子问题提取")
                 
                 # 确保参数顺序与maximize_grpo_objective的定义匹配
                 loss_val, avg_r, rdict = maximize_grpo_objective(
@@ -1390,15 +1708,17 @@ def train_with_grpo(
                     use_shapley=use_shapley,
                     atomic_questions=atomic_questions,
                     use_token_level=use_token_level,
+                    token_reward_mode=token_reward_mode,  # 新增参数传递
                     alpha=alpha_reward,
                     beta_reward=beta_reward,
-                    gamma=gamma_reward
+                    gamma=gamma_reward,
+                    format_reward_weight=format_reward_weight
                 )
             logging.info("成功最大化GRPO目标函数")
 
             print(
                 f"迭代 {it}/{num_iterations}, 步骤 {step+1}/{min(steps_per_iteration, len(dataloader))}, "
-                f"损失: {loss_val:.6f}, 平均奖励: {avg_r:.2f}"
+                f"损失: {loss_val:.6f}, 平均奖励: {avg_r:.2f}, Token模式: {token_reward_mode}"
             )
             if accelerator.is_local_main_process:
                 try:
@@ -1416,18 +1736,37 @@ def train_with_grpo(
                     print(f"📊 SwanLab记录 - Format: {format_reward:.3f}, Answer: {answer_reward:.3f}, Fact: {fact_reward:.3f}")
                     print(f"📋 原始数据 - Format scores: {rdict.get('format_scores', [])}")
                     
+                    # 构建SwanLab记录字典
+                    swanlab_data = {
+                        "Iteration": it,
+                        "Step": step+1,
+                        "Loss": loss_val,
+                        "Avg Reward": avg_r,
+                        "Format Reward": format_reward,
+                        "Answer Reward": answer_reward,
+                        "Fact Score Reward": fact_reward,
+                        "Token Reward Mode": token_reward_mode,  # 新增：记录token奖励模式
+                    }
+                    
+                    # 🎯 添加token级奖励统计到SwanLab
+                    if use_token_level and "question_token_rewards" in rdict:
+                        question_token_mean = sum(rdict["question_token_rewards"]) / len(rdict["question_token_rewards"]) if rdict["question_token_rewards"] else 0.0
+                        swanlab_data["token_rewards/question_token_mean"] = question_token_mean
+                    
+                    if use_token_level and "answer_token_rewards" in rdict:
+                        answer_token_mean = sum(rdict["answer_token_rewards"]) / len(rdict["answer_token_rewards"]) if rdict["answer_token_rewards"] else 0.0
+                        swanlab_data["token_rewards/answer_token_mean"] = answer_token_mean
+                    
+                    if use_token_level and "format_token_rewards" in rdict:
+                        format_token_mean = sum(rdict["format_token_rewards"]) / len(rdict["format_token_rewards"]) if rdict["format_token_rewards"] else 0.0
+                        swanlab_data["token_rewards/format_token_mean"] = format_token_mean
+                    
+                    if use_token_level and "token_rewards_mean" in rdict:
+                        total_token_mean = sum(rdict["token_rewards_mean"]) / len(rdict["token_rewards_mean"]) if rdict["token_rewards_mean"] else 0.0
+                        swanlab_data["token_rewards/total_token_mean"] = total_token_mean
+                    
                     # 记录到SwanLab
-                    swanlab.log(
-                        {
-                            "Iteration": it,
-                            "Step": step+1,
-                            "Loss": loss_val,
-                            "Avg Reward": avg_r,
-                            "Format Reward": format_reward,
-                            "Answer Reward": answer_reward,
-                            "Fact Score Reward": fact_reward,
-                        }
-                    )
+                    swanlab.log(swanlab_data)
                 except Exception as e:
                     logging.warning(f"记录SwanLab日志失败: {str(e)}")
 
@@ -1780,7 +2119,7 @@ if __name__ == '__main__':
             print(completion)
 
         print("="*80)
-        print("Rewards:")
+        print("标准奖励计算:")
         rewards_dict = overall_reward(
             model=model,
             tokenizer=tokenizer,
@@ -1791,72 +2130,56 @@ if __name__ == '__main__':
         )
         print(rewards_dict)
 
-        # 在打印完mask的统计信息后添加以下代码，显示所有mask=1的token组成的完整文本
+        # 🚀 新增：测试两种token级奖励计算模式
         print("\n" + "="*80)
-        print("Mask=1 Token分析 - 测试mask是否正确标记了医生模型生成的内容:")
-        for i in range(c_mask.size(0)):
-            # 获取当前样本的completion_ids和mask
-            c_ids = rollout["input_ids"][i, -completion_length:]
-            cur_mask = c_mask[i]
+        print("🚀 Token级奖励分配模式对比测试:")
+        
+        # 模式1: token_baseline (原方式)
+        print("\n🎯 模式1: token_baseline - 每个token位置计算baseline")
+        from src.models.doctor_reward import overall_reward_with_token_allocation
+        
+        completion_length = rollout["completion_mask"].size(1)
+        
+        token_rewards_1 = overall_reward_with_token_allocation(
+            model=model,
+            tokenizer=tokenizer,
+            facts=rollout["repeated_facts"],
+            completions=rollout["formatted_completions"],
+            options=rollout["repeated_options"],
+            answers=rollout["repeated_answers"],
+            use_shapley=False,
+            atomic_questions=None,
+            use_token_level=True,
+            max_completion_length=completion_length
+        )
+        
+        print(f"Token_baseline模式结果: {list(token_rewards_1.keys())}")
+        if 'token_rewards' in token_rewards_1:
+            print(f"Token rewards数量: {len(token_rewards_1['token_rewards'])}")
+            for i, tr in enumerate(token_rewards_1['token_rewards'][:2]):  # 只显示前2个
+                nonzero_count = sum(1 for r in tr if r != 0)
+                total_reward = sum(tr)
+                print(f"  Sample {i}: 非零token数={nonzero_count}/{len(tr)}, 总奖励={total_reward:.3f}")
+        
+        # 模式2: rollout_baseline (新方式)
+        print("\n🎯 模式2: rollout_baseline - 每个rollout计算总分后组内比较")
+        
+        # 使用compute_rollout_total_advantages直接测试
+        if 'token_rewards' in token_rewards_1:
+            token_rewards_list = token_rewards_1['token_rewards']
             
-            # 找出所有mask=1的位置
-            masked_positions = (cur_mask == 1).nonzero().squeeze().tolist()
-            if not isinstance(masked_positions, list):
-                masked_positions = [masked_positions]  # 处理只有一个位置的情况
+            # 测试新的advantage计算方法
+            rollout_advantages = compute_rollout_total_advantages(
+                token_rewards_list, 
+                rollout["num_generations"], 
+                rollout["completion_mask"]
+            )
             
-            # 获取所有mask=1的token
-            masked_tokens = [c_ids[pos].item() for pos in masked_positions]
-            
-            # 将所有mask=1的token解码为文本
-            masked_text = tokenizer.decode(masked_tokens)
-            
-            # 获取原始完整文本
-            full_text = tokenizer.decode(c_ids)
-            
-            print(f"\n样本 {i} 的Mask=1部分:")
-            print(f"完整文本长度: {len(full_text)}, Mask=1文本长度: {len(masked_text)}")
-            print(f"Mask=1的token数量: {len(masked_tokens)}/{len(c_ids)}")
-            
-            # 对比mask=1的文本和原始文本中的医生回复部分
-            try:
-                # 解析对话，分离医生和患者部分
-                dialog = parse_dialog_simple(full_text)
-                doctor_parts = [turn["content"] for turn in dialog if turn["role"] == "assistant"]
-                doctor_text = " ".join(doctor_parts)
-                
-                print(f"医生部分长度: {len(doctor_text)}")
-                
-                # 计算mask=1文本与医生部分的相似度 (简单字符重叠率)
-                common_chars = sum(1 for c in masked_text if c in doctor_text)
-                similarity = common_chars / len(masked_text) if masked_text else 0
-                
-                print(f"医生部分与Mask=1部分的字符重叠率: {similarity:.2f}")
-                
-                # 显示mask=1的文本（截断以避免过长）
-                print("\nMask=1文本 (前500字符):")
-                print(masked_text[:500] + ("..." if len(masked_text) > 500 else ""))
-                
-                # 检查mask=1部分是否包含关键标记
-                user_markers = ["<|im_start|>user", "<|im_end|>"]
-                for marker in user_markers:
-                    if marker in masked_text:
-                        print(f"警告: Mask=1部分包含用户标记 '{marker}'")
-
-                # 检查question:/answer:标记是否被包含在mask=1中
-                if "question:" in masked_text.lower() or "问题:" in masked_text.lower():
-                    print("✓ 问题标记已被正确包含在mask=1中")
-                else:
-                    print("✗ 问题标记未被包含在mask=1中")
-                    
-                if "answer:" in masked_text.lower() or "回答:" in masked_text.lower() or "答案:" in masked_text.lower():
-                    print("✓ 回答标记已被正确包含在mask=1中")
-                else:
-                    print("✗ 回答标记未被包含在mask=1中")
-                    
-            except Exception as e:
-                print(f"解析对话时出错: {e}")
-            
-            print("-"*50)
+            print(f"Rollout_baseline模式Advantage形状: {rollout_advantages.shape}")
+            print(f"Advantage统计: mean={rollout_advantages.mean():.4f}, std={rollout_advantages.std():.4f}")
+        
+      
 
         break
+
 

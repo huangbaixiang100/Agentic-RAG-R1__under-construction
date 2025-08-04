@@ -1,0 +1,4 @@
+file_name,model,accuracy,bootstrap_mean,variance,confidence_lower,confidence_upper,sample_count
+vllm_8702_cmb_full_uot.json,vllm,0.4393,0.4404,0.010200,0.4217,0.4582,1935
+vllm_8701_cmb_full_uot.json,vllm,0.4057,0.4057,0.010072,0.3871,0.4256,1935
+qwen1.7b_cmb_full_uot.json,qwen1.7b,0.4393,0.4379,0.009971,0.4214,0.4600,1935

@@ -99,7 +99,7 @@ def match_choice(text,options_dict):
         answer = matches[0].upper()
         answer = "".join(sorted(set(answer)))
         if res:
-            res_answer="".join([x for x in res.group(2) if x in option])
+             res_answer="".join([x for x in res.group(2) if x in option])
             #if res_answer!= answer:
                 #print(text)
                 #print(answer,res_answer)
@@ -497,7 +497,7 @@ def normalize_shapley_weights(shapley_scores: np.ndarray, method: str = "softmax
             print(f"⚠️ {method}计算出现数值问题，回退到均匀权重")
             weights = np.ones(len(shapley_scores)) / len(shapley_scores)
         
-        return weightscc
+        return weights
         
     except (OverflowError, FloatingPointError, ZeroDivisionError) as e:
         print(f"⚠️ {method}计算出错: {e}，回退到均匀权重")
@@ -853,35 +853,132 @@ def compute_question_shapley_gains(
     """
     question_gains = []
     
-    # 创建事实检查器
+    # 创建事实检查器 - 保持使用外部API
     fact_checker_client = OpenAI(api_key="8cefb70606f3472d8731bd65661ce409",
                                 base_url="http://8289.model.mingxingtech.com:10032/v1")
     fact_checker_model = 'qwen2.5:72b'
     
-    for turn in dialog:
+    print(f"🔍 ===== Shapley增益计算调试信息 =====")
+    print(f"📊 输入参数:")
+    print(f"  - 事实列表: {len(fact_list)}个事实")
+    print(f"  - 对话轮数: {len(dialog)}轮")
+    print(f"  - Shapley权重: {shapley_weights}")
+    print(f"  - 原子问题: '{atomic_question}'")
+    print(f"  - 目标答案: '{target_answer}'")
+    
+    # 打印事实列表详情
+    for i, fact in enumerate(fact_list):
+        print(f"  事实{i}: '{fact}' (权重: {shapley_weights[i] if i < len(shapley_weights) else 'N/A'})")
+    
+    assistant_count = 0
+    for turn_idx, turn in enumerate(dialog):
         if turn['role'] == 'assistant':  # 医生的问题
+            assistant_count += 1
             question_gain = 0.0
             turn_content = turn['content']
             
+            print(f"\n🎭 处理Assistant回合 {assistant_count}:")
+            print(f"  回合内容: '{turn_content[:200]}...'")
+            
             # 检查这个问题获取了哪些事实
+            acquired_facts = []
+            api_success_count = 0
+            api_fail_count = 0
+            
             for i, fact in enumerate(fact_list):
+                fact_acquired = False
+                method_used = ""
+                
                 try:
                     # 检查事实是否在该轮对话中被获取
                     prompt = check_fact_prompt.format(context=turn_content, fact=fact)
                     fact_check_messages = [{"role": "user", "content": prompt}]
+                    
+                    print(f"    🔍 检查事实{i}: '{fact[:50]}...'")
+                    print(f"      Fact Check Prompt: '{prompt[:100]}...'")
+                    
                     ans = call_gpt(fact_checker_client, fact_checker_model, fact_check_messages)
+                    api_success_count += 1
+                    method_used = "API"
+                    
+                    print(f"      ✅ API调用成功，响应: '{ans[:100]}...'")
                     
                     if "True" in ans:
-                        # 如果获取了该事实，累加其Shapley值
-                        question_gain += shapley_weights[i]
+                        fact_acquired = True
+                        print(f"      ✅ API确认事实被获取")
+                    else:
+                        print(f"      ❌ API确认事实未获取")
                         
                 except Exception as e:
-                    print(f"⚠️ 检查事实时出错: {e}")
-                    # 回退到字符串匹配
-                    if fact.lower() in turn_content.lower():
-                        question_gain += shapley_weights[i]
+                    api_fail_count += 1
+                    method_used = "字符串匹配"
+                    print(f"      ⚠️ API调用失败: {str(e)[:200]}")
+                    
+                    # 回退到改进的字符串匹配
+                    fact_lower = fact.lower()
+                    turn_lower = turn_content.lower()
+                    
+                    # 改进的字符串匹配：检查关键词
+                    fact_keywords = [word for word in fact_lower.split() if len(word) > 2]
+                    if len(fact_keywords) > 0:
+                        match_count = sum(1 for keyword in fact_keywords if keyword in turn_lower)
+                        match_ratio = match_count / len(fact_keywords)
+                        
+                        print(f"      🔤 字符串匹配分析:")
+                        print(f"        关键词: {fact_keywords}")
+                        print(f"        匹配数: {match_count}/{len(fact_keywords)}")
+                        print(f"        匹配率: {match_ratio:.2f}")
+                        
+                        if match_ratio >= 0.5:  # 至少50%的关键词匹配
+                            fact_acquired = True
+                            print(f"        ✅ 字符串匹配确认事实被获取")
+                        else:
+                            print(f"        ❌ 字符串匹配确认事实未获取")
+                    else:
+                        print(f"      ⚠️ 事实无有效关键词，默认未获取")
+                
+                # 累加Shapley值
+                if fact_acquired:
+                    if i < len(shapley_weights):
+                        shapley_contribution = shapley_weights[i]
+                        question_gain += shapley_contribution
+                        acquired_facts.append({
+                            'index': i,
+                            'fact': fact[:50] + '...' if len(fact) > 50 else fact,
+                            'weight': shapley_contribution,
+                            'method': method_used
+                        })
+                        print(f"      💰 累加Shapley值: {shapley_contribution:.4f}")
+                    else:
+                        print(f"      ⚠️ Shapley权重索引超出范围: {i} >= {len(shapley_weights)}")
+                else:
+                    print(f"      📝 事实未获取，Shapley值为0")
+            
+            print(f"\n  📊 Assistant回合 {assistant_count} 统计:")
+            print(f"    API成功调用: {api_success_count}次")
+            print(f"    API失败回退: {api_fail_count}次")
+            print(f"    获取事实数量: {len(acquired_facts)}个")
+            print(f"    总Shapley增益: {question_gain:.4f}")
+            
+            if acquired_facts:
+                print(f"    获取的事实详情:")
+                for fact_info in acquired_facts:
+                    print(f"      - 事实{fact_info['index']}: {fact_info['fact']} (权重:{fact_info['weight']:.4f}, 方法:{fact_info['method']})")
+            else:
+                print(f"    ⚠️ 该回合未获取任何事实！")
             
             question_gains.append(question_gain)
+    
+    print(f"\n🏆 ===== Shapley增益计算完成 =====")
+    print(f"📈 最终问题Shapley增益列表: {question_gains}")
+    print(f"📊 统计信息:")
+    print(f"  - 总assistant回合数: {assistant_count}")
+    print(f"  - 平均增益: {sum(question_gains)/len(question_gains) if question_gains else 0:.4f}")
+    print(f"  - 最大增益: {max(question_gains) if question_gains else 0:.4f}")
+    print(f"  - 最小增益: {min(question_gains) if question_gains else 0:.4f}")
+    print(f"  - 是否所有增益都为0: {all(gain == 0 for gain in question_gains)}")
+    print(f"  - 是否所有增益都为1: {all(gain == 1.0 for gain in question_gains)}")
+    print("=" * 60)
     
     return question_gains
 
@@ -890,61 +987,68 @@ def compute_token_level_rewards(
     model, tokenizer, facts: List[str], 
     completions: List[List[Dict[str, Any]]],
     options: List[Dict[str, str]], answers: List[str],
-    use_shapley: bool = False,
+    use_shapley: bool = True,
     atomic_questions: List[str] = None,
-    alpha: float = 1.0,  # 过程奖励权重
-    beta: float = 1.0,   # 结果奖励权重
-    gamma: float = 3.0,  # 最终答案奖励权重
-    max_completion_length: int = None,  # 新增：最大completion长度限制
+    alpha: float = 1.0,  # Question Shapley奖励权重
+    beta: float = 1.0,   # Question结果奖励权重  
+    gamma: float = 3.0,  # Answer正确性奖励权重
+    format_reward_weight: float = 1.0,  # 格式奖励权重
+    max_completion_length: int = None,
     **kwargs
 ) -> Dict[str, Any]:
     """
-    计算token级奖励分配 - 真正的问题级精细分配
+    计算纯Token级奖励分配 - 整合格式奖励和内容奖励
     
-    实现逻辑：
-    1. 识别每个"question:"句子的token边界
-    2. 为每个问题计算其Shapley信息增益
-    3. 每个问题的token获得: α × 该问题Shapley增益 + β × 该问题Shapley增益 × answer_correct
-    4. 最终答案token获得: γ × answer_correct
-    5. 其他token获得: 0
+    新的奖励系统（满分4分）：
+    1. Question tokens: Shapley奖励(0-3分) + 格式奖励(0-1分) = 最高4分
+    2. Answer tokens: 正确性奖励(0-3分) + 格式奖励(0-1分) = 最高4分  
+    3. 其他tokens: 0分
+    
+    格式奖励规则：
+    - 以"question:"开头的句子，所有token获得格式奖励1分
+    - 以"answer:"开头的句子，所有token获得格式奖励1分
+    - 其他token格式奖励0分
     
     Args:
-        max_completion_length: 最大completion长度，与completion_mask保持一致
+        format_reward_weight: 格式奖励权重（默认1.0）
+        max_completion_length: 最大completion长度
     
     Returns:
         Dict包含:
         - token_rewards: List[List[float]] - 每个样本的token级奖励
-        - total_scores: List[float] - 兼容性的总分
-        - question_shapley_gains: List[List[float]] - 每个问题的Shapley增益
+        - question_token_rewards: List[float] - Question token奖励均值
+        - answer_token_rewards: List[float] - Answer token奖励均值
+        - format_token_rewards: List[float] - 格式奖励均值
+        - token_rewards_mean: List[float] - 总token奖励均值
     """
-    print(" ===== 真正的Token级问题奖励分配 =====")
-    print(f" 输入参数: max_completion_length={max_completion_length}")
-    print(f" completions数量: {len(completions)}")
+    print("🔍 ===== 纯Token级奖励分配（整合格式奖励） =====")
+    print(f"📏 输入参数: max_completion_length={max_completion_length}")
+    print(f"📏 completions数量: {len(completions)}")
+    print(f"🎯 奖励权重: alpha={alpha}, beta={beta}, gamma={gamma}, format_weight={format_reward_weight}")
     
     try:
-        # 先计算基础的奖励分数（用于兼容性）
-        base_rewards = overall_reward(
-            model, tokenizer, facts, completions, options, answers,
-            use_shapley=use_shapley, atomic_questions=atomic_questions
-        )
-        
         token_rewards_list = []
-        question_gains_list = []
+        question_token_rewards_list = []  # 用于统计question token均值
+        answer_token_rewards_list = []    # 用于统计answer token均值
+        format_token_rewards_list = []    # 用于统计格式奖励均值
+        token_rewards_mean_list = []      # 用于统计总体均值
         
         for i, completion_list in enumerate(completions):
-            print(f" 处理completion组 {i}: 包含{len(completion_list)}个样本")
+            print(f"🎯 处理completion组 {i}: 包含{len(completion_list)}个样本")
             for j, completion_dict in enumerate(completion_list):
                 # 获取完整的对话文本
                 completion_text = completion_dict.get('content', '')
                 print(f"📄 Sample {i}-{j}: 原始文本长度={len(completion_text)}字符")
                 
-                # 检查最终答案是否正确
-                base_idx = i * len(completion_list) + j
-                answer_correct = 0.0
-                if base_idx < len(base_rewards.get('correctness_scores', [])):
-                    answer_correct = 1.0 if base_rewards['correctness_scores'][base_idx] > 0 else 0.0
+                # 直接计算答案正确性（不依赖base_rewards）
+                last_response = completion_text.split("<|im_start|>assistant")[-1].strip()
+                # 兼容处理options字段（统一使用options）
+                current_options = options[i] if i < len(options) else {}
+                model_answer = match_choice(last_response, current_options)
+                correct_answer = answers[i].strip() if i < len(answers) else ""
+                answer_correct = 1.0 if model_answer == correct_answer else 0.0
                 
-                print(f" Sample {i}-{j}: answer_correct={answer_correct}")
+                print(f"📊 Sample {i}-{j}: 模型答案='{model_answer}', 正确答案='{correct_answer}', answer_correct={answer_correct}")
                 
                 # 将文本tokenize并应用截断
                 tokens = tokenizer.encode(completion_text, add_special_tokens=False)
@@ -953,103 +1057,176 @@ def compute_token_level_rewards(
                 if max_completion_length is not None and len(tokens) > max_completion_length:
                     tokens = tokens[:max_completion_length]
                     completion_text = tokenizer.decode(tokens, skip_special_tokens=False)
-                    print(f" Sample {i}-{j}: Token序列从{original_token_length}截断到{len(tokens)}")
+                    print(f"✂️ Sample {i}-{j}: Token序列从{original_token_length}截断到{len(tokens)}")
                 else:
-                    print(f" Sample {i}-{j}: 无需截断，保持长度={len(tokens)}")
+                    print(f"✅ Sample {i}-{j}: 无需截断，保持长度={len(tokens)}")
                 
-                # 初始化所有token奖励为0
+                # 初始化token奖励和统计变量
                 token_rewards = [0.0] * len(tokens)
+                question_tokens_rewards = []  # 收集question token的奖励
+                answer_tokens_rewards = []    # 收集answer token的奖励  
+                format_tokens_rewards = []    # 收集格式奖励的token
                 
-                #  关键：识别question和answer的token边界
+                # 🎯 第一步：计算格式奖励
+                # 检查每个句子是否以"question:"或"answer:"开头，如果是，该句子所有token获得格式奖励
+                format_question_boundaries, format_answer_boundaries = extract_format_boundaries(completion_text, tokenizer)
+                
+                print(f"📝 Sample {i}-{j}: 格式检查 - {len(format_question_boundaries)}个question格式, {len(format_answer_boundaries)}个answer格式")
+                
+                # 为格式正确的question句子的所有token分配格式奖励
+                for start_idx, end_idx, base_reward in format_question_boundaries:
+                    for token_idx in range(start_idx, min(end_idx, len(token_rewards))):
+                        actual_reward = base_reward * format_reward_weight
+                        token_rewards[token_idx] += actual_reward
+                        format_tokens_rewards.append(actual_reward)
+                        print(f"✅ Question格式奖励: token[{token_idx}] += {actual_reward:.3f} (base={base_reward}, weight={format_reward_weight})")
+                
+                # 为格式正确的answer句子的所有token分配格式奖励
+                for start_idx, end_idx, base_reward in format_answer_boundaries:
+                    for token_idx in range(start_idx, min(end_idx, len(token_rewards))):
+                        actual_reward = base_reward * format_reward_weight
+                        token_rewards[token_idx] += actual_reward
+                        format_tokens_rewards.append(actual_reward)
+                        print(f"✅ Answer格式奖励: token[{token_idx}] += {actual_reward:.3f} (base={base_reward}, weight={format_reward_weight})")
+                
+                # 🎯 第二步：识别内容边界（所有question和answer，不管格式）
                 question_boundaries, answer_boundaries = extract_question_answer_boundaries(completion_text, tokenizer)
                 
-                print(f"🎭 Sample {i}-{j}: 识别到{len(question_boundaries)}个问题, {len(answer_boundaries)}个答案")
+                print(f"🎭 Sample {i}-{j}: 内容识别 - {len(question_boundaries)}个问题, {len(answer_boundaries)}个答案")
                 
-                # 如果使用Shapley，计算每个问题的信息增益
+                # 🎯 第三步：计算Question内容奖励（使用Shapley值）
                 question_gains = []
+                
+                print(f"🎯 Sample {i}-{j}: 第三步 - 开始计算Question内容奖励")
+                print(f"  参数检查: use_shapley={use_shapley}, atomic_questions存在={atomic_questions is not None}, i<len(facts)={i < len(facts) if facts else False}")
+                
                 if use_shapley and atomic_questions and i < len(facts):
                     fact_list = facts[i]
+                    base_idx = i * len(completion_list) + j
                     atomic_question = atomic_questions[base_idx] if base_idx < len(atomic_questions) else "默认问题"
                     
-                    print(f" Sample {i}-{j}: 开始计算每个问题的Shapley增益...")
-                    
-                    # 解析对话
-                    dialog = parse_dialog(completion_text)
+                    print(f"🧮 Sample {i}-{j}: 开始计算每个问题的Shapley增益...")
                     
                     try:
+                        print(f"🚀 Sample {i}-{j}: 开始完整Shapley流程...")
+                        
+                        # 解析对话
+                        dialog = parse_dialog(completion_text)
+                        print(f"  📋 对话解析完成: {len(dialog)}轮对话")
+                        
                         # 计算整体Shapley权重
+                        print(f"  🧮 开始计算Shapley值...")
                         shapley_scores = compute_equal_shapley_values(
                             model, tokenizer, fact_list, atomic_question, 
                             answers[i] if i < len(answers) else "默认答案",
-                            max_samples=15, min_samples=3
+                            max_samples=50, min_samples=3
                         )
+                        print(f"  📊 Shapley值计算完成: {shapley_scores}")
+                        
                         shapley_weights = normalize_shapley_weights(shapley_scores, method="softmax", temperature=2.0)
+                        print(f"  ⚖️ Shapley权重归一化完成: {shapley_weights}")
                         
                         # 计算每个问题的Shapley增益
+                        print(f"  🎯 开始计算每个问题的Shapley增益...")
                         question_gains = compute_question_shapley_gains(
                             model, tokenizer, fact_list, dialog, atomic_question,
                             answers[i] if i < len(answers) else "默认答案", shapley_weights
                         )
                         
-                        print(f" Sample {i}-{j}: 问题Shapley增益: {question_gains}")
+                        print(f"📊 Sample {i}-{j}: 问题Shapley增益: {question_gains}")
                         
                     except Exception as e:
-                        print(f" Sample {i}-{j}: Shapley计算失败: {e}, 使用默认增益")
+                        print(f"❌ Sample {i}-{j}: Shapley计算失败!")
+                        print(f"   错误类型: {type(e).__name__}")
+                        print(f"   错误消息: {str(e)}")
+                        import traceback
+                        print(f"   错误堆栈: {traceback.format_exc()}")
+                        print(f"   回退到默认增益1.0")
                         question_gains = [1.0] * len(question_boundaries)
+                        
                 else:
-                    # 不使用Shapley时，所有问题增益相等
-                    question_gains = [1.0] * len(question_boundaries)
+                    # 不使用Shapley时，使用均匀权重分配
+                    if i < len(facts):
+                        fact_list = facts[i]
+                        dialog = parse_dialog(completion_text)
+                        
+                        print(f"📊 Sample {i}-{j}: 使用均匀权重模式")
+                        print(f"  事实总数: {len(fact_list)}")
+                        print(f"  问题数量: {len(question_boundaries)}")
+                        
+                        # 为每个问题分配均匀权重：1/总事实数
+                        uniform_gain_per_question = 1.0 / len(fact_list) if len(fact_list) > 0 else 1.0
+                        question_gains = [uniform_gain_per_question] * len(question_boundaries)
+                        
+                        print(f"📊 Sample {i}-{j}: 均匀增益分配: {uniform_gain_per_question:.4f} * {len(question_boundaries)} = {question_gains}")
+                    else:
+                        # 回退到默认值
+                        question_gains = [1.0] * len(question_boundaries)
+                        print(f"📊 Sample {i}-{j}: 无事实数据，使用默认增益1.0")
                 
-                question_gains_list.append(question_gains)
-                
-                #  为每个问题的token分配奖励
+                # 🎯 第四步：为Question tokens分配内容奖励
                 for q_idx, (start_idx, end_idx) in enumerate(question_boundaries):
                     if q_idx < len(question_gains):
                         shapley_gain = question_gains[q_idx]
                         
-                        # 问题获得的奖励：过程奖励 + 结果奖励（如果答案正确）
-                        question_reward = alpha * shapley_gain + beta * shapley_gain * answer_correct
+                        # Question内容奖励：过程奖励 + 结果奖励（如果答案正确）
+                        question_content_reward = alpha * shapley_gain + beta * shapley_gain * answer_correct
                         
-                        print(f"💰 Sample {i}-{j} Question {q_idx}: Shapley增益={shapley_gain:.3f}, 奖励={question_reward:.3f}")
+                        print(f"💰 Sample {i}-{j} Question {q_idx}: Shapley增益={shapley_gain:.3f}, 内容奖励={question_content_reward:.3f}")
                         
-                        # 将奖励分配给该问题的所有token
                         for token_idx in range(start_idx, min(end_idx, len(token_rewards))):
-                            token_rewards[token_idx] = question_reward
+                            token_rewards[token_idx] += question_content_reward
+                            question_tokens_rewards.append(token_rewards[token_idx])  # 记录总奖励（包含格式奖励）
+                            print(f"  📈 Question token[{token_idx}]: 总奖励={token_rewards[token_idx]:.3f}")
                 
-                #  为最终答案的token分配奖励
+                # 🎯 第五步：为Answer tokens分配内容奖励
                 for start_idx, end_idx in answer_boundaries:
-                    answer_reward = gamma * answer_correct
-                    print(f"🏆 Sample {i}-{j}: 答案部分获得奖励={answer_reward:.3f}")
+                    answer_content_reward = gamma * answer_correct
+                    print(f"🏆 Sample {i}-{j}: 答案内容奖励={answer_content_reward:.3f}")
                     
-                    # 将奖励分配给答案的所有token
                     for token_idx in range(start_idx, min(end_idx, len(token_rewards))):
-                        token_rewards[token_idx] = answer_reward
+                        token_rewards[token_idx] += answer_content_reward
+                        answer_tokens_rewards.append(token_rewards[token_idx])  # 记录总奖励（包含格式奖励）
+                        print(f"  📈 Answer token[{token_idx}]: 总奖励={token_rewards[token_idx]:.3f}")
                 
-                # 统计奖励分配情况
-                nonzero_rewards = sum(1 for r in token_rewards if r != 0)
-                total_reward = sum(token_rewards)
-                print(f"✅ Sample {i}-{j}: 非零奖励token数={nonzero_rewards}/{len(token_rewards)}, 总奖励={total_reward:.3f}")
+                # 🎯 第六步：统计当前样本的各类奖励均值
+                sample_question_mean = sum(question_tokens_rewards) / len(question_tokens_rewards) if question_tokens_rewards else 0.0
+                sample_answer_mean = sum(answer_tokens_rewards) / len(answer_tokens_rewards) if answer_tokens_rewards else 0.0
+                sample_format_mean = sum(format_tokens_rewards) / len(format_tokens_rewards) if format_tokens_rewards else 0.0
+                sample_total_mean = sum(token_rewards) / len(token_rewards) if token_rewards else 0.0
+                
+                question_token_rewards_list.append(sample_question_mean)
+                answer_token_rewards_list.append(sample_answer_mean)
+                format_token_rewards_list.append(sample_format_mean)
+                token_rewards_mean_list.append(sample_total_mean)
+                
+                print(f"📊 Sample {i}-{j} 奖励统计:")
+                print(f"  🎯 Question tokens均值: {sample_question_mean:.3f}")
+                print(f"  🎯 Answer tokens均值: {sample_answer_mean:.3f}")
+                print(f"  🎯 格式奖励均值: {sample_format_mean:.3f}")
+                print(f"  🎯 总体token均值: {sample_total_mean:.3f}")
+                print(f"  📈 非零奖励token数: {sum(1 for r in token_rewards if r > 0)}/{len(token_rewards)}")
+                print("=" * 80)
                 
                 token_rewards_list.append(token_rewards)
         
-        print(f" 总共生成了{len(token_rewards_list)}个token_rewards")
+        print(f"✅ 总共生成了{len(token_rewards_list)}个token_rewards")
         
-        # 返回包含token级奖励的结果
+        # 返回包含详细统计的结果
         result = {
             'token_rewards': token_rewards_list,
-            'total_scores': base_rewards.get('total_scores', []),
-            'fact_scores': base_rewards.get('fact_scores', []),
-            'correctness_scores': base_rewards.get('correctness_scores', []),
-            'format_scores': base_rewards.get('format_scores', []), 
-            'question_shapley_gains': question_gains_list  # 新增：每个问题的Shapley增益
+            'question_token_rewards': question_token_rewards_list,
+            'answer_token_rewards': answer_token_rewards_list,
+            'format_token_rewards': format_token_rewards_list,
+            'token_rewards_mean': token_rewards_mean_list
         }
         
-        print(f" 返回结果包含字段: {list(result.keys())}")
-        print(f" Format scores: {result['format_scores']}")
+        print(f"📊 最终统计结果:")
+        print(f"  🎯 Question tokens均值: {sum(question_token_rewards_list)/len(question_token_rewards_list) if question_token_rewards_list else 0:.3f}")
+        print(f"  🎯 Answer tokens均值: {sum(answer_token_rewards_list)/len(answer_token_rewards_list) if answer_token_rewards_list else 0:.3f}")
+        print(f"  🎯 格式奖励均值: {sum(format_token_rewards_list)/len(format_token_rewards_list) if format_token_rewards_list else 0:.3f}")
+        print(f"  🎯 总体token均值: {sum(token_rewards_mean_list)/len(token_rewards_mean_list) if token_rewards_mean_list else 0:.3f}")
         
-        if 'shapley_scores' in base_rewards:
-            result['shapley_scores'] = base_rewards['shapley_scores']
-            
         return result
         
     except Exception as e:
@@ -1061,11 +1238,10 @@ def compute_token_level_rewards(
         total_samples = sum(len(comp_list) for comp_list in completions)
         return {
             'token_rewards': [[] for _ in range(total_samples)],
-            'total_scores': [0.0] * total_samples,
-            'fact_scores': [0.0] * total_samples,
-            'correctness_scores': [0.0] * total_samples,
-            'format_scores': [0.0] * total_samples,  
-            'question_shapley_gains': [[] for _ in range(total_samples)]
+            'question_token_rewards': [0.0] * total_samples,
+            'answer_token_rewards': [0.0] * total_samples,
+            'format_token_rewards': [0.0] * total_samples,
+            'token_rewards_mean': [0.0] * total_samples
         }
 
 
@@ -1088,6 +1264,8 @@ def extract_question_answer_boundaries(completion_text: str, tokenizer) -> Tuple
     full_tokens = tokenizer.encode(completion_text, add_special_tokens=False)
     full_text = tokenizer.decode(full_tokens, skip_special_tokens=False)
     
+    print(f"🔍 完整文本内容预览: {full_text[:200]}...")
+    
     question_boundaries = []
     answer_boundaries = []
     
@@ -1104,11 +1282,21 @@ def extract_question_answer_boundaries(completion_text: str, tokenizer) -> Tuple
     for i, match in enumerate(question_matches):
         start_char = match.start()
         
-        # 找到下一个question或answer的开始位置作为结束点
+        # 🔧 修复：寻找question的结束位置，应该是下一个<|im_start|>标记或answer标记
         end_char = len(full_text)
-        for next_match in question_matches[i+1:] + answer_matches:
-            if next_match.start() > start_char:
-                end_char = next_match.start()
+        
+        # 首先查找下一个<|im_start|>标记（用户回复开始）
+        next_im_start_pos = full_text.find('<|im_start|>', start_char + 1)
+        if next_im_start_pos != -1:
+            end_char = next_im_start_pos
+            print(f"   找到下一个<|im_start|>标记位置: {next_im_start_pos}")
+        
+        # 然后查找下一个answer标记，取更近的那个
+        for next_answer_match in answer_matches:
+            if next_answer_match.start() > start_char:
+                if next_answer_match.start() < end_char:
+                    end_char = next_answer_match.start()
+                    print(f"   找到更近的answer标记位置: {next_answer_match.start()}")
                 break
         
         # 将字符位置转换为token位置
@@ -1123,16 +1311,27 @@ def extract_question_answer_boundaries(completion_text: str, tokenizer) -> Tuple
         
         question_boundaries.append((start_token, end_token))
         print(f" Question {i}: 字符[{start_char}:{end_char}] -> token[{start_token}:{end_token}]")
+        print(f"   问题内容预览: '{question_text[:100]}...'")
     
     # 为每个answer找到其token边界
     for i, match in enumerate(answer_matches):
         start_char = match.start()
         
-        # 找到下一个question或answer的开始位置作为结束点
+        # 🔧 修复：寻找answer的结束位置，应该是下一个<|im_start|>标记或question标记
         end_char = len(full_text)
-        for next_match in question_matches + answer_matches[i+1:]:
-            if next_match.start() > start_char:
-                end_char = next_match.start()
+        
+        # 首先查找下一个<|im_start|>标记
+        next_im_start_pos = full_text.find('<|im_start|>', start_char + 1)
+        if next_im_start_pos != -1:
+            end_char = next_im_start_pos
+            print(f"   找到下一个<|im_start|>标记位置: {next_im_start_pos}")
+        
+        # 然后查找下一个question标记，取更近的那个
+        for next_question_match in question_matches:
+            if next_question_match.start() > start_char:
+                if next_question_match.start() < end_char:
+                    end_char = next_question_match.start()
+                    print(f"   找到更近的question标记位置: {next_question_match.start()}")
                 break
         
         # 将字符位置转换为token位置
@@ -1147,8 +1346,125 @@ def extract_question_answer_boundaries(completion_text: str, tokenizer) -> Tuple
         
         answer_boundaries.append((start_token, end_token))
         print(f" Answer {i}: 字符[{start_char}:{end_char}] -> token[{start_token}:{end_token}]")
+        print(f"   答案内容预览: '{answer_text[:100]}...'")
+    
+    # 🔍 验证边界的正确性
+    print(f"📊 边界验证:")
+    for i, (start_token, end_token) in enumerate(question_boundaries):
+        if start_token < len(full_tokens) and end_token <= len(full_tokens):
+            question_tokens = full_tokens[start_token:end_token]
+            question_text = tokenizer.decode(question_tokens, skip_special_tokens=False)
+            print(f"   Question {i} tokens[{start_token}:{end_token}]: '{question_text[:50]}...'")
+            
+            # 检查是否包含<|im_start|>标记
+            if '<|im_start|>' in question_text:
+                print(f"   ⚠️ Question {i} 包含<|im_start|>标记，边界可能有误!")
+        else:
+            print(f"   ❌ Question {i} 边界超出范围: [{start_token}:{end_token}] vs {len(full_tokens)}")
+    
+    for i, (start_token, end_token) in enumerate(answer_boundaries):
+        if start_token < len(full_tokens) and end_token <= len(full_tokens):
+            answer_tokens = full_tokens[start_token:end_token]
+            answer_text = tokenizer.decode(answer_tokens, skip_special_tokens=False)
+            print(f"   Answer {i} tokens[{start_token}:{end_token}]: '{answer_text[:50]}...'")
+            
+            # 检查是否包含<|im_start|>标记
+            if '<|im_start|>' in answer_text:
+                print(f"   ⚠️ Answer {i} 包含<|im_start|>标记，边界可能有误!")
+        else:
+            print(f"   ❌ Answer {i} 边界超出范围: [{start_token}:{end_token}] vs {len(full_tokens)}")
     
     return question_boundaries, answer_boundaries
+
+
+def extract_format_boundaries(completion_text: str, tokenizer) -> Tuple[List[Tuple[int, int, float]], List[Tuple[int, int, float]]]:
+    """
+    识别格式奖励的question和answer边界，支持分级奖励
+    
+    格式奖励规则：
+    - 以"question:"开头: 1.0分
+    - 包含"question:"但不开头: 0.5分  
+    - 以"answer:"开头: 1.0分
+    - 包含"answer:"但不开头: 0.5分
+    - 无标记: 0.0分
+    
+    Args:
+        completion_text: 完整的对话文本
+        tokenizer: 分词器
+        
+    Returns:
+        Tuple[format_question_boundaries, format_answer_boundaries]:
+        - format_question_boundaries: List[Tuple[int, int, float]] - (start_token, end_token, reward_score)
+        - format_answer_boundaries: List[Tuple[int, int, float]] - (start_token, end_token, reward_score)
+    """
+    print(f"🔍 开始识别格式奖励边界（分级奖励）...")
+    
+    # 将完整文本tokenize
+    full_tokens = tokenizer.encode(completion_text, add_special_tokens=False)
+    full_text = tokenizer.decode(full_tokens, skip_special_tokens=False)
+    
+    format_question_boundaries = []
+    format_answer_boundaries = []
+    
+    # 🎯 策略：基于assistant回合进行分析
+    # 找到所有assistant回合的开始和结束位置
+    assistant_pattern = r'<\|im_start\|>assistant(.*?)(?=<\|im_start\||$)'
+    assistant_matches = list(re.finditer(assistant_pattern, full_text, re.DOTALL))
+    
+    print(f"📝 找到{len(assistant_matches)}个assistant回合")
+    
+    for i, assistant_match in enumerate(assistant_matches):
+        assistant_content = assistant_match.group(1).strip()
+        assistant_start_char = assistant_match.start() + len('<|im_start|>assistant')
+        assistant_end_char = assistant_match.end()
+        
+        print(f"🎭 Assistant回合 {i}: 内容预览='{assistant_content[:50]}...'")
+        
+        # 检查question标记
+        question_reward = 0.0
+        if assistant_content.startswith('question:'):
+            question_reward = 1.0
+            print(f"  ✅ 以question:开头，奖励=1.0")
+        elif 'question:' in assistant_content:
+            question_reward = 0.5
+            print(f"  ⚠️ 包含question:但不开头，奖励=0.5")
+        else:
+            print(f"  ❌ 无question标记，奖励=0.0")
+        
+        # 检查answer标记  
+        answer_reward = 0.0
+        if assistant_content.startswith('answer:'):
+            answer_reward = 1.0
+            print(f"  ✅ 以answer:开头，奖励=1.0")
+        elif 'answer:' in assistant_content:
+            answer_reward = 0.5
+            print(f"  ⚠️ 包含answer:但不开头，奖励=0.5")
+        else:
+            print(f"  ❌ 无answer标记，奖励=0.0")
+        
+        # 转换为token位置
+        if question_reward > 0.0 or answer_reward > 0.0:
+            # 计算assistant回合的token边界
+            prefix_text = full_text[:assistant_start_char]
+            assistant_text = full_text[assistant_start_char:assistant_end_char]
+            
+            prefix_tokens = tokenizer.encode(prefix_text, add_special_tokens=False)
+            assistant_tokens = tokenizer.encode(assistant_text, add_special_tokens=False)
+            
+            start_token = len(prefix_tokens)
+            end_token = start_token + len(assistant_tokens)
+            
+            # 根据内容类型添加到相应列表
+            if question_reward > 0.0:
+                format_question_boundaries.append((start_token, end_token, question_reward))
+                print(f"  📝 Question格式边界: token[{start_token}:{end_token}], 奖励={question_reward}")
+            
+            if answer_reward > 0.0:
+                format_answer_boundaries.append((start_token, end_token, answer_reward))
+                print(f"  📝 Answer格式边界: token[{start_token}:{end_token}], 奖励={answer_reward}")
+    
+    print(f"📊 格式奖励统计: {len(format_question_boundaries)}个question边界, {len(format_answer_boundaries)}个answer边界")
+    return format_question_boundaries, format_answer_boundaries
 
 
 def overall_reward_with_token_allocation(
@@ -1185,5 +1501,3 @@ def overall_reward_with_token_allocation(
             model, tokenizer, facts, completions, options, answers,
             use_shapley=use_shapley, atomic_questions=atomic_questions
         )
-
-

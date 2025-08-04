@@ -1,0 +1,7 @@
+file_name,dataset,model,accuracy,bootstrap_mean,variance,confidence_lower,confidence_upper,sample_count
+QwenVLLM_local_cmb_results.jsonl,CMB,Qwen3_8b2,0.159173,0.159742,0.007692,0.143643,0.172093,1935
+QwenVLLM_local_medqa_results.jsonl,MedQA,Qwen3_8b2,0.356638,0.357282,0.015016,0.333071,0.383759,1273
+QwenVLLM_local_cmb_results.jsonl,CMB,Qwen3_8b,0.332394,0.331556,0.013951,0.305194,0.355000,1420
+QwenVLLM_local_medqa_results.jsonl,MedQA,Qwen3_8b,0.446970,0.447765,0.019497,0.414141,0.489299,792
+qwen3-1.7b_cmb_results.jsonl,CMB,Qwen3_1.7b,0.312145,0.311266,0.010444,0.295310,0.334225,1935
+qwen3-1.7b_medqa_results.jsonl,MedQA,Qwen3_1.7b,0.370968,0.371282,0.014440,0.343770,0.402036,1240

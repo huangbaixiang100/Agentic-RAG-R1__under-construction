@@ -3,34 +3,33 @@ project:
   description: "under-construction"
 
 experiment:
-  name: "promed-qwen25-1.5b-correctness-reward72-softmax"  # 实验名称，对应 experiments/ 下的目录
+  name: "qwen_rolloutreward_medqa"  # 实验名称，对应 experiments/ 下的目录
   random_seed: 42
 
 # SwanLab配置
 swanlab: true
 
 model:
-  #name: "Qwen/Qwen2.5-1.5B-Instruct"  # 基础模型名称，不变
-  #name: "/home/xiaobei/小北健康-qwen2.5-7b"
-  name: "/data/xiaobei/dhx/LLaMA-Factory-main-new/models/promed-qwen2.5-1.5b-sft-3epoch-merged"
+  name: "/home/xiaobei/Agentic-RAG-R1__under-construction/sftmodel/qwen3_1.7b_medqa_sft_merged"
   torch_dtype: "bfloat16"
   device_map: null
 
 dataset:
-  name: "cmb"
+  name: "medqa"
   num_eval: 100
+ # train_file: "/home/xiaobei/Agentic-RAG-R1__under-construction/src/data/medqa_train_atomic_data.jsonl"
 
 training:
   continue_training: false
-  current_step: 645
+  current_step: 0
 
-  use_lora: false
+  use_lora: true
   use_quant: false  # 全参数微调时建议关闭量化以获得更好效果
   batch_size: 1
-  learning_rate: 0.000001  # 全参数微调使用更低的学习率
-  num_iterations: 40 # epoch
+  learning_rate: 0.000005  # 全参数微调使用更低的学习率
+  num_iterations: 10 # epoch
   steps_per_iteration: 5 # in one epoch
-  save_interval: 50 # steps
+  save_interval: 10 # steps
 
   generation:
     num_generations: 4

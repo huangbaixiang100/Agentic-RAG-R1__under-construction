@@ -87,7 +87,7 @@ def prepare_dataset_cmb(split="train", eval_size=10, train_file=None, test_file=
             'prompt': final_prompt,
             'facts': example['facts'],
             'answer': example['answer'],
-            'option': example['option'],
+            'options': example['option'],  # 将option字段统一改名为options
             'atomic_question': example['atomic_question']  # 添加原子问题字段
         }
         formatted_data.append(formatted_example)
@@ -185,7 +185,7 @@ def prepare_dataset_medqa(split="train", eval_size=10, train_file=None, test_fil
     # 如果指定了本地文件路径，使用本地文件
     if test_file or train_file:
         # 设置默认数据文件路径
-        default_test_file = '/home/xiaobei/hbx/ood补充实验/medqa_test_convo.jsonl'
+        default_test_file = '/home/xiaobei/Agentic-RAG-R1__under-construction/src/data/medqa_train_atomic_data.jsonl'
         
         # 使用提供的文件路径或默认路径
         test_data_file = test_file if test_file else default_test_file
@@ -214,22 +214,17 @@ def prepare_dataset_medqa(split="train", eval_size=10, train_file=None, test_fil
                 if line.strip():  # 跳过空行
                     example = json.loads(line)
                     
-                    # 提取部分上下文作为已知信息（类似CMB的处理方式）
-                    if isinstance(example['context'], list) and len(example['context']) > 0:
-                        # 取前一半的上下文作为已知信息
-                        context_len = len(example['context'])
-                        partial_context = example['context'][:max(1, context_len // 2)]
-                        initial_info = ' '.join(partial_context)
-                    elif isinstance(example['context'], str):
-                        # 如果是字符串，按句号分割，取前一半
-                        sentences = example['context'].split('. ')
-                        partial_context = sentences[:max(1, len(sentences) // 2)]
-                        initial_info = '. '.join(partial_context)
+                    # 提取部分facts作为已知信息（类似CMB的处理方式）
+                    if 'facts' in example and isinstance(example['facts'], list) and len(example['facts']) > 0:
+                        # 取前一半的facts作为已知信息
+                        facts_len = len(example['facts'])
+                        partial_facts = example['facts'][:max(1, facts_len // 2)]
+                        initial_info = '，'.join(partial_facts) + '。'
                     else:
                         initial_info = ""
                     
-                    # 构建部分问题（已知信息 + 问题）
-                    partial_question = initial_info + '\n' + example['question']
+                    # 构建部分问题（已知信息 + 原子问题）
+                    partial_question = initial_info + example['atomic_question']
                     
                     # 格式化选项
                     option_str = "\n".join([f"{key}: {value}" for key, value in example['options'].items()])
@@ -249,12 +244,10 @@ def prepare_dataset_medqa(split="train", eval_size=10, train_file=None, test_fil
                     formatted_example = {
                         "id": example['id'],
                         'prompt': final_prompt,
-                        'context': example['context'],
+                        'facts': example.get('facts', []),  # 使用facts字段
                         'answer': example['answer_idx'],  # 使用选项字母
-                        'answer_text': example['answer'],  
-                        'option': example['options'],
-                        'question': example['question'],
-                        'atomic_facts': example.get('atomic_facts', [])  
+                        'options': example['options'],  # 保持options字段名一致
+                        'atomic_question': example['atomic_question']  # 添加原子问题字段
                     }
                     formatted_data.append(formatted_example)
         
